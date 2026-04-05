@@ -1,0 +1,4 @@
+pyTelegramBotAPI
+groq
+pillow
+dotenv
