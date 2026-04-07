@@ -19,11 +19,17 @@ client = Groq(api_key=GROQ_API_KEY)
 MODELO_VISION = "meta-llama/llama-4-scout-17b-16e-instruct" 
 
 # --- PERFIL DE USUARIO ESTÁTICO (Para la PoC) ---
+# perfil_usuario = {
+#     "nombre": "Juan Pérez",
+#     "condiciones_medicas": ["Celiaquía"],
+#     "alergias": ["Maní", "Leche"],
+#     "preferencias": ["Sin azúcar añadida"]
+# }
 perfil_usuario = {
-    "nombre": "Juan Pérez",
-    "condiciones_medicas": ["Celiaquía"],
-    "alergias": ["Maní", "Leche"],
-    "preferencias": ["Sin azúcar añadida"]
+    "nombre": "Carlos Diabético",
+    "condiciones_medicas": ["Diabetes Tipo 2", "Intolerancia a la Lactosa"],
+    "alergias": ["Ninguna"],
+    "preferencias": ["Cero azúcar añadida", "Sin derivados de la leche"]
 }
 
 def procesar_imagen_para_groq(image_bytes):
@@ -38,10 +44,23 @@ def procesar_imagen_para_groq(image_bytes):
     img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
     return f"data:image/jpeg;base64,{img_str}"
 
+from telebot import types # Importa los tipos para los botones
+
 @bot.message_handler(commands=['start', 'help'])
 def enviar_bienvenida(message):
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] 👤 Nuevo usuario inició el bot: {message.from_user.first_name}")
-    bot.reply_to(message, f"👋 ¡Hola! Soy NutriAR Bot.\nTu perfil actual indica alergia a: {', '.join(perfil_usuario['alergias'])} y condición: {', '.join(perfil_usuario['condiciones_medicas'])}.\n\n📷 Envíame la foto de los ingredientes de un producto para analizarlo.")
+    markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+    
+    # IMPORTANTE: Reemplaza la URL con la de tu GitHub Pages o tu tunnel de Ngrok
+    web_app = types.WebAppInfo("https://tu-usuario.github.io/tu-repo/") 
+    
+    btn = types.KeyboardButton(text="🚀 Abrir Escáner NutriAR", web_app=web_app)
+    markup.add(btn)
+    
+    bot.reply_to(message, 
+                 "👋 ¡Bienvenido a NutriAR!\n\n"
+                 "Puedes enviarme una foto para un análisis detallado o "
+                 "usar el nuevo escáner en Realidad Aumentada.", 
+                 reply_markup=markup)
 
 @bot.message_handler(content_types=['photo'])
 def analizar_etiqueta(message):
