@@ -51,7 +51,8 @@ def enviar_bienvenida(message):
     markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
     
     # IMPORTANTE: Reemplaza la URL con la de tu GitHub Pages o tu tunnel de Ngrok
-    web_app = types.WebAppInfo("https://tu-usuario.github.io/tu-repo/") 
+    # En tu bot.py, dentro de enviar_bienvenida:
+    web_app = types.WebAppInfo("https://matiasguerreroc.github.io/ici5442-nutriar-project/")
     
     btn = types.KeyboardButton(text="🚀 Abrir Escáner NutriAR", web_app=web_app)
     markup.add(btn)
