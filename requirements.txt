@@ -1,4 +1,8 @@
 pyTelegramBotAPI
 groq
 pillow
-dotenv
+python-dotenv
+fastapi
+uvicorn[standard]
+python-multipart
+requests

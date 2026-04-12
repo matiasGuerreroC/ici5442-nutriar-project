@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NutriAR Scanner</title>
+    <style>
+        :root {
+            --bg: #07111f;
+            --panel: rgba(8, 18, 32, 0.82);
+            --panel-strong: rgba(9, 22, 38, 0.94);
+            --text: #f3f7fb;
+            --muted: rgba(243, 247, 251, 0.72);
+            --accent: #44d19d;
+            --danger: #ff5f6d;
+            --warning: #ffb347;
+            --shadow: 0 22px 80px rgba(0, 0, 0, 0.42);
+        }
+
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(68, 209, 157, 0.18), transparent 32%),
+                radial-gradient(circle at bottom right, rgba(255, 95, 109, 0.15), transparent 30%),
+                var(--bg);
+            color: var(--text);
+        }
+
+        #camera-feed {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            filter: saturate(1.1) contrast(1.05);
+        }
+
+        .overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            pointer-events: none;
+            padding: 16px;
+        }
+
+        .top-bar {
+            pointer-events: auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 18px;
+            background: linear-gradient(180deg, rgba(8, 18, 32, 0.78), rgba(8, 18, 32, 0.52));
+            backdrop-filter: blur(14px);
+            box-shadow: var(--shadow);
+        }
+
+        .brand {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .brand strong {
+            font-size: 16px;
+            letter-spacing: 0.2px;
+        }
+
+        .brand span,
+        .helper {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .status-pill {
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(68, 209, 157, 0.14);
+            color: var(--accent);
+            border: 1px solid rgba(68, 209, 157, 0.24);
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .scan-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            margin: 18px 0;
+        }
+
+        .scan-frame {
+            width: min(88vw, 420px);
+            height: min(54vh, 460px);
+            border-radius: 28px;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            box-shadow:
+                0 0 0 999px rgba(0, 0, 0, 0.33),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+                var(--shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .scan-frame::before {
+            content: "";
+            position: absolute;
+            inset: 14px;
+            border-radius: 20px;
+            border: 2px solid rgba(68, 209, 157, 0.22);
+        }
+
+        .scan-line {
+            position: absolute;
+            left: 12px;
+            right: 12px;
+            top: 18%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(68, 209, 157, 0.95), transparent);
+            box-shadow: 0 0 24px rgba(68, 209, 157, 0.75);
+            animation: sweep 2.4s ease-in-out infinite;
+        }
+
+        @keyframes sweep {
+            0%, 100% { transform: translateY(-8px); opacity: 0.35; }
+            50% { transform: translateY(250px); opacity: 1; }
+        }
+
+        .bottom-panel {
+            pointer-events: auto;
+            display: grid;
+            gap: 12px;
+        }
+
+        #ar-card {
+            background: var(--panel);
+            backdrop-filter: blur(16px);
+            color: var(--text);
+            width: 100%;
+            padding: 18px;
+            border-radius: 22px;
+            text-align: left;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transform: translateY(12px);
+            opacity: 0;
+            transition: opacity 0.32s ease, transform 0.32s ease;
+        }
+
+        #ar-card.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .card-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
+        .card-head h2 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .badge {
+            padding: 7px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+
+        .badge.ok {
+            background: rgba(68, 209, 157, 0.16);
+            color: var(--accent);
+        }
+
+        .badge.warning {
+            background: rgba(255, 95, 109, 0.16);
+            color: var(--danger);
+        }
+
+        .badge.info {
+            background: rgba(255, 179, 71, 0.16);
+            color: var(--warning);
+        }
+
+        #risk-text {
+            margin: 0 0 8px;
+            line-height: 1.45;
+            color: rgba(243, 247, 251, 0.92);
+        }
+
+        .meta {
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.4;
+        }
+
+        .actions {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+        }
+
+        .btn-scan {
+            pointer-events: auto;
+            background: linear-gradient(135deg, #44d19d, #2ec4b6);
+            color: #041017;
+            border: none;
+            padding: 15px 18px;
+            border-radius: 18px;
+            font-size: 16px;
+            font-weight: 800;
+            box-shadow: 0 14px 30px rgba(68, 209, 157, 0.24);
+            cursor: pointer;
+        }
+
+        .btn-secondary {
+            pointer-events: auto;
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 15px 16px;
+            border-radius: 18px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .btn-scan:disabled,
+        .btn-secondary:disabled {
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        .loading {
+            display: none;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .loading.visible { display: block; }
+
+        canvas { display: none; }
+    </style>
+</head>
+<body>
+    <video id="camera-feed" autoplay playsinline muted></video>
+
+    <div class="overlay">
+        <div class="top-bar">
+            <div class="brand">
+                <strong>NutriAR Scanner</strong>
+                <span>Escáner AR conectado al bot y a Groq</span>
+            </div>
+            <div id="status-pill" class="status-pill">Cámara lista</div>
+        </div>
+
+        <div class="scan-wrap">
+            <div class="scan-frame">
+                <div class="scan-line"></div>
+            </div>
+        </div>
+
+        <div class="bottom-panel">
+            <div id="ar-card">
+                <div class="card-head">
+                    <h2 id="card-title">Resultado del análisis</h2>
+                    <span id="card-badge" class="badge info">Listo</span>
+                </div>
+                <p id="risk-text">Apunta al producto y presiona analizar para enviar el frame al bot.</p>
+                <div class="meta" id="meta-text">Perfil activo: Carlos Diabético</div>
+            </div>
+
+            <div class="loading" id="loading-text">Enviando imagen al backend y consultando la LLM...</div>
+
+            <div class="actions">
+                <button class="btn-scan" id="scan-button" onclick="startScan()">ANALIZAR AHORA</button>
+                <button class="btn-secondary" id="camera-button" onclick="restartCamera()">Reintentar cámara</button>
+            </div>
+            <div class="helper">Si abres esto dentro de Telegram, usa una URL pública HTTPS para la cámara y el endpoint.</div>
+        </div>
+    </div>
+
+    <canvas id="capture-canvas"></canvas>
+
+    <script>
+        const apiBaseUrl = window.NUTRIAR_API_BASE_URL || window.location.origin;
+        const video = document.getElementById('camera-feed');
+        const canvas = document.getElementById('capture-canvas');
+        const card = document.getElementById('ar-card');
+        const riskText = document.getElementById('risk-text');
+        const cardTitle = document.getElementById('card-title');
+        const cardBadge = document.getElementById('card-badge');
+        const statusPill = document.getElementById('status-pill');
+        const loadingText = document.getElementById('loading-text');
+        const scanButton = document.getElementById('scan-button');
+        const cameraButton = document.getElementById('camera-button');
+        const metaText = document.getElementById('meta-text');
+
+        let cameraStream = null;
+        let isScanning = false;
+
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.ready();
+            window.Telegram.WebApp.expand();
+        }
+
+        async function initCamera() {
+            try {
+                statusPill.textContent = 'Solicitando cámara...';
+                cameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' },
+                    audio: false
+                });
+                video.srcObject = cameraStream;
+                statusPill.textContent = 'Cámara lista';
+            } catch (err) {
+                statusPill.textContent = 'Error de cámara';
+                showResult('warning', 'No se pudo acceder a la cámara', 'Verifica permisos del navegador y vuelve a intentarlo.');
+                alert('Error al acceder a la cámara: ' + err);
+            }
+        }
+
+        async function restartCamera() {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+            }
+            await initCamera();
+        }
+
+        function setLoading(active) {
+            loadingText.classList.toggle('visible', active);
+            scanButton.disabled = active;
+            cameraButton.disabled = active;
+            scanButton.textContent = active ? 'ESCANEANDO...' : 'ANALIZAR AHORA';
+        }
+
+        function showResult(level, title, message) {
+            card.classList.add('visible');
+            cardTitle.textContent = title;
+            riskText.textContent = message;
+            cardBadge.className = 'badge ' + level;
+
+            if (level === 'ok') {
+                cardBadge.textContent = 'APTO';
+                statusPill.textContent = 'Producto seguro';
+                metaText.textContent = 'El análisis coincide con tu perfil activo: Carlos Diabético';
+            } else if (level === 'warning') {
+                cardBadge.textContent = 'RIESGO';
+                statusPill.textContent = 'Atención requerida';
+                metaText.textContent = 'El producto puede entrar en conflicto con tus restricciones.';
+            } else {
+                cardBadge.textContent = 'LISTO';
+                statusPill.textContent = 'Preparado';
+                metaText.textContent = 'Apunta la cámara y vuelve a escanear cuando quieras.';
+            }
+        }
+
+        async function captureFrame() {
+            if (!video.videoWidth || !video.videoHeight) {
+                throw new Error('La cámara todavía no está lista.');
+            }
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            return new Promise((resolve, reject) => {
+                canvas.toBlob((blob) => {
+                    if (!blob) {
+                        reject(new Error('No se pudo capturar la imagen.'));
+                        return;
+                    }
+                    resolve(blob);
+                }, 'image/jpeg', 0.92);
+            });
+        }
+
+        async function startScan() {
+            if (isScanning) {
+                return;
+            }
+
+            isScanning = true;
+            setLoading(true);
+            card.classList.remove('visible');
+            statusPill.textContent = 'Escaneando...';
+
+            try {
+                const blob = await captureFrame();
+                const formData = new FormData();
+                formData.append('image', blob, 'scan.jpg');
+                console.log('[CLIENT] Enviando imagen al backend...');
+
+                const response = await fetch(apiBaseUrl + '/api/analyze', {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'ngrok-skip-browser-warning': 'true'
+                    },
+                    body: formData
+                });
+
+                console.log('[CLIENT] Respuesta recibida:', response.status, response.statusText);
+                const contentType = (response.headers.get('content-type') || '').toLowerCase();
+
+                if (!contentType.includes('application/json')) {
+                    const rawText = await response.text();
+                    console.error('[CLIENT] Respuesta no JSON:', rawText.slice(0, 300));
+                    throw new Error(
+                        'El endpoint no devolvio JSON. Revisa WEBAPP_URL/ngrok: ' +
+                        apiBaseUrl + '/api/health'
+                    );
+                }
+
+                const data = await response.json();
+                console.log('[CLIENT] JSON parseado:', data);
+
+                if (data.status === 'error') {
+                    console.error('[CLIENT] Error del servidor:', data.error);
+                    throw new Error(data.error || 'El servidor devolvió un error.');
+                }
+
+                if (!response.ok && data.status !== 'success') {
+                    console.error('[CLIENT] Respuesta no ok:', data);
+                    throw new Error(data.error || 'El backend devolvió un error.');
+                }
+
+                const display = data.display || {};
+                const level = display.status === 'ok' ? 'ok' : 'warning';
+                console.log('[CLIENT] Mostrando resultado:', level, display.title);
+                showResult(level, display.title || 'Resultado del análisis', display.message || 'Sin detalles.');
+            } catch (err) {
+                console.error('[CLIENT] Excepción capturada:', err);
+                showResult('warning', 'Error de análisis', err.message || 'No se pudo completar el análisis.');
+                statusPill.textContent = 'Error';
+            } finally {
+                setLoading(false);
+                scanButton.textContent = 'RE-ESCANEAR';
+                isScanning = false;
+            }
+        }
+
+        initCamera();
+    </script>
+</body>
+</html>
