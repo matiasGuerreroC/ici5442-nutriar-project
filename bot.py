@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from groq import Groq
 from PIL import Image
 from telebot import types
@@ -20,7 +21,8 @@ load_dotenv()
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-WEBAPP_URL = os.getenv("WEBAPP_URL", "http://127.0.0.1:8000/")
+# Cambia esto en bot.py
+WEBAPP_URL = os.getenv("WEBAPP_URL", "http://127.0.0.1:8000/") + "?v=2"
 PORT = int(os.getenv("PORT", "8000"))
 MODELO_VISION = "meta-llama/llama-4-scout-17b-16e-instruct"
 
@@ -33,6 +35,8 @@ if not GROQ_API_KEY:
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 client = Groq(api_key=GROQ_API_KEY)
 app = FastAPI(title="NutriAR Backend")
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Configurar CORS para permitir requests desde el navegador y Telegram WebApp
 app.add_middleware(

@@ -3,458 +3,202 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NutriAR Scanner</title>
+    <title>NutriAR Real-AR</title>
+    <!-- Librerías -->
+    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.0/dist/mindar-image-aframe.prod.js"></script>
+    
     <style>
         :root {
             --bg: #07111f;
-            --panel: rgba(8, 18, 32, 0.82);
-            --panel-strong: rgba(9, 22, 38, 0.94);
-            --text: #f3f7fb;
-            --muted: rgba(243, 247, 251, 0.72);
+            --panel: rgba(8, 18, 32, 0.85);
             --accent: #44d19d;
-            --danger: #ff5f6d;
-            --warning: #ffb347;
-            --shadow: 0 22px 80px rgba(0, 0, 0, 0.42);
+        }
+        /* El body DEBE ser transparente para que se vea el video de MindAR detrás */
+        body, html { 
+            margin: 0; padding: 0; width: 100%; height: 100%; 
+            overflow: hidden; background: transparent; font-family: sans-serif; 
         }
 
-        * { box-sizing: border-box; }
-        html, body {
-            margin: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            background:
-                radial-gradient(circle at top left, rgba(68, 209, 157, 0.18), transparent 32%),
-                radial-gradient(circle at bottom right, rgba(255, 95, 109, 0.15), transparent 30%),
-                var(--bg);
-            color: var(--text);
-        }
-
-        #camera-feed {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            filter: saturate(1.1) contrast(1.05);
-        }
-
-        .overlay {
-            position: absolute;
+        a-scene {
+            position: fixed;
             inset: 0;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            pointer-events: none;
-            padding: 16px;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+            background: transparent !important;
+        }
+
+        canvas,
+        video {
+            position: fixed !important;
+            inset: 0;
+            width: 100vw !important;
+            height: 100vh !important;
+            object-fit: cover;
+        }
+        
+        /* UI Overlay */
+        .overlay {
+            position: absolute; inset: 0; display: flex; flex-direction: column;
+            justify-content: space-between; pointer-events: none; padding: 16px; 
+            z-index: 100; /* Aseguramos que la UI esté arriba */
         }
 
         .top-bar {
-            pointer-events: auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 14px;
-            border-radius: 18px;
-            background: linear-gradient(180deg, rgba(8, 18, 32, 0.78), rgba(8, 18, 32, 0.52));
-            backdrop-filter: blur(14px);
-            box-shadow: var(--shadow);
-        }
-
-        .brand {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-
-        .brand strong {
-            font-size: 16px;
-            letter-spacing: 0.2px;
-        }
-
-        .brand span,
-        .helper {
-            font-size: 12px;
-            color: var(--muted);
+            pointer-events: auto; display: flex; justify-content: space-between;
+            padding: 12px; border-radius: 18px; background: var(--panel); backdrop-filter: blur(10px);
+            color: white;
         }
 
         .status-pill {
-            padding: 8px 12px;
-            border-radius: 999px;
-            background: rgba(68, 209, 157, 0.14);
-            color: var(--accent);
-            border: 1px solid rgba(68, 209, 157, 0.24);
-            font-size: 12px;
-            white-space: nowrap;
+            padding: 8px 12px; border-radius: 999px; font-size: 12px;
+            background: rgba(255, 255, 255, 0.1); color: white;
         }
-
-        .scan-wrap {
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex: 1;
-            margin: 18px 0;
-        }
+        .status-pill.detected { background: var(--accent); color: #000; font-weight: bold; }
 
         .scan-frame {
-            width: min(88vw, 420px);
-            height: min(54vh, 460px);
-            border-radius: 28px;
-            border: 1px solid rgba(255, 255, 255, 0.16);
-            box-shadow:
-                0 0 0 999px rgba(0, 0, 0, 0.33),
-                inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-                var(--shadow);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .scan-frame::before {
-            content: "";
-            position: absolute;
-            inset: 14px;
-            border-radius: 20px;
-            border: 2px solid rgba(68, 209, 157, 0.22);
-        }
-
-        .scan-line {
-            position: absolute;
-            left: 12px;
-            right: 12px;
-            top: 18%;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, rgba(68, 209, 157, 0.95), transparent);
-            box-shadow: 0 0 24px rgba(68, 209, 157, 0.75);
-            animation: sweep 2.4s ease-in-out infinite;
-        }
-
-        @keyframes sweep {
-            0%, 100% { transform: translateY(-8px); opacity: 0.35; }
-            50% { transform: translateY(250px); opacity: 1; }
-        }
-
-        .bottom-panel {
-            pointer-events: auto;
-            display: grid;
-            gap: 12px;
+            width: 70vw; height: 40vh; border: 2px dashed rgba(68, 209, 157, 0.5);
+            border-radius: 20px; margin: auto;
         }
 
         #ar-card {
-            background: var(--panel);
-            backdrop-filter: blur(16px);
-            color: var(--text);
-            width: 100%;
-            padding: 18px;
-            border-radius: 22px;
-            text-align: left;
-            box-shadow: var(--shadow);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            transform: translateY(12px);
-            opacity: 0;
-            transition: opacity 0.32s ease, transform 0.32s ease;
+            background: var(--panel); padding: 20px; border-radius: 22px; color: white;
+            transform: translateY(150px); opacity: 0; transition: 0.3s; pointer-events: auto;
         }
-
-        #ar-card.visible {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        .card-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            margin-bottom: 10px;
-        }
-
-        .card-head h2 {
-            margin: 0;
-            font-size: 18px;
-        }
-
-        .badge {
-            padding: 7px 10px;
-            border-radius: 999px;
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.3px;
-        }
-
-        .badge.ok {
-            background: rgba(68, 209, 157, 0.16);
-            color: var(--accent);
-        }
-
-        .badge.warning {
-            background: rgba(255, 95, 109, 0.16);
-            color: var(--danger);
-        }
-
-        .badge.info {
-            background: rgba(255, 179, 71, 0.16);
-            color: var(--warning);
-        }
-
-        #risk-text {
-            margin: 0 0 8px;
-            line-height: 1.45;
-            color: rgba(243, 247, 251, 0.92);
-        }
-
-        .meta {
-            font-size: 12px;
-            color: var(--muted);
-            line-height: 1.4;
-        }
-
-        .actions {
-            display: grid;
-            grid-template-columns: 1fr auto;
-            gap: 10px;
-        }
+        #ar-card.visible { transform: translateY(0); opacity: 1; }
 
         .btn-scan {
-            pointer-events: auto;
             background: linear-gradient(135deg, #44d19d, #2ec4b6);
-            color: #041017;
-            border: none;
-            padding: 15px 18px;
-            border-radius: 18px;
-            font-size: 16px;
-            font-weight: 800;
-            box-shadow: 0 14px 30px rgba(68, 209, 157, 0.24);
-            cursor: pointer;
+            color: #000; border: none; padding: 15px; border-radius: 15px;
+            font-weight: bold; width: 100%; cursor: pointer;
         }
 
-        .btn-secondary {
-            pointer-events: auto;
-            background: rgba(255, 255, 255, 0.08);
-            color: var(--text);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 15px 16px;
-            border-radius: 18px;
-            font-size: 14px;
-            cursor: pointer;
-        }
-
-        .btn-scan:disabled,
-        .btn-secondary:disabled {
-            cursor: not-allowed;
-            opacity: 0.7;
-        }
-
-        .loading {
-            display: none;
-            font-size: 12px;
-            color: var(--muted);
-        }
-
-        .loading.visible { display: block; }
-
-        canvas { display: none; }
+        /* Ocultar elementos innecesarios de la librería */
+        .mindar-ui-scanning { display: none; }
     </style>
 </head>
 <body>
-    <video id="camera-feed" autoplay playsinline muted></video>
 
+    <!-- Escena de Realidad Aumentada -->
+    <!-- uiScanning: false quita la pantalla de carga de la librería que a veces se queda pegada -->
+    <a-scene 
+        mindar-image="imageTargetSrc: /static/targets.mind; autoStart: true; uiScanning: false;" 
+        embedded 
+        color-space="sRGB" 
+        renderer="colorManagement: true; physicallyCorrectLights: true; precision: mediump;" 
+        vr-mode-ui="enabled: false" 
+        device-orientation-permission-ui="enabled: false">
+        
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+        <a-entity id="target-ingredientes" mindar-image-target="targetIndex: 0">
+            <a-plane position="0 0 0.1" width="1" height="0.5" color="red" opacity="0.7">
+                <a-text id="ar-text-0" value="Detectado" align="center"></a-text>
+            </a-plane>
+        </a-entity>
+    </a-scene>
+
+    <!-- Interfaz de Usuario -->
     <div class="overlay">
         <div class="top-bar">
-            <div class="brand">
-                <strong>NutriAR Scanner</strong>
-                <span>Escáner AR conectado al bot y a Groq</span>
+            <div>
+                <strong style="display:block">NutriAR AI</strong>
+                <span id="target-info">Buscando etiqueta...</span>
             </div>
-            <div id="status-pill" class="status-pill">Cámara lista</div>
+            <div id="status-pill" class="status-pill">Escaneando</div>
         </div>
 
-        <div class="scan-wrap">
-            <div class="scan-frame">
-                <div class="scan-line"></div>
-            </div>
-        </div>
+        <div class="scan-frame"></div>
 
         <div class="bottom-panel">
             <div id="ar-card">
-                <div class="card-head">
-                    <h2 id="card-title">Resultado del análisis</h2>
-                    <span id="card-badge" class="badge info">Listo</span>
-                </div>
-                <p id="risk-text">Apunta al producto y presiona analizar para enviar el frame al bot.</p>
-                <div class="meta" id="meta-text">Perfil activo: Carlos Diabético</div>
-            </div>
-
-            <div class="loading" id="loading-text">Enviando imagen al backend y consultando la LLM...</div>
-
-            <div class="actions">
+                <h3 id="card-title" style="margin-top:0">Análisis NutriAR</h3>
+                <p id="risk-text">Enfoca una etiqueta para comenzar.</p>
                 <button class="btn-scan" id="scan-button" onclick="startScan()">ANALIZAR AHORA</button>
-                <button class="btn-secondary" id="camera-button" onclick="restartCamera()">Reintentar cámara</button>
             </div>
-            <div class="helper">Si abres esto dentro de Telegram, usa una URL pública HTTPS para la cámara y el endpoint.</div>
         </div>
     </div>
 
-    <canvas id="capture-canvas"></canvas>
-
     <script>
-        const apiBaseUrl = window.NUTRIAR_API_BASE_URL || window.location.origin;
-        const video = document.getElementById('camera-feed');
-        const canvas = document.getElementById('capture-canvas');
-        const card = document.getElementById('ar-card');
-        const riskText = document.getElementById('risk-text');
-        const cardTitle = document.getElementById('card-title');
-        const cardBadge = document.getElementById('card-badge');
         const statusPill = document.getElementById('status-pill');
-        const loadingText = document.getElementById('loading-text');
-        const scanButton = document.getElementById('scan-button');
-        const cameraButton = document.getElementById('camera-button');
-        const metaText = document.getElementById('meta-text');
+        const targetInfo = document.getElementById('target-info');
+        const arCard = document.getElementById('ar-card');
+        const riskText = document.getElementById('risk-text');
 
-        let cameraStream = null;
-        let isScanning = false;
-
-        if (window.Telegram && window.Telegram.WebApp) {
-            window.Telegram.WebApp.ready();
-            window.Telegram.WebApp.expand();
-        }
-
-        async function initCamera() {
-            try {
-                statusPill.textContent = 'Solicitando cámara...';
-                cameraStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment' },
-                    audio: false
-                });
-                video.srcObject = cameraStream;
-                statusPill.textContent = 'Cámara lista';
-            } catch (err) {
-                statusPill.textContent = 'Error de cámara';
-                showResult('warning', 'No se pudo acceder a la cámara', 'Verifica permisos del navegador y vuelve a intentarlo.');
-                alert('Error al acceder a la cámara: ' + err);
-            }
-        }
-
-        async function restartCamera() {
-            if (cameraStream) {
-                cameraStream.getTracks().forEach(track => track.stop());
-            }
-            await initCamera();
-        }
-
-        function setLoading(active) {
-            loadingText.classList.toggle('visible', active);
-            scanButton.disabled = active;
-            cameraButton.disabled = active;
-            scanButton.textContent = active ? 'ESCANEANDO...' : 'ANALIZAR AHORA';
-        }
-
-        function showResult(level, title, message) {
-            card.classList.add('visible');
-            cardTitle.textContent = title;
-            riskText.textContent = message;
-            cardBadge.className = 'badge ' + level;
-
-            if (level === 'ok') {
-                cardBadge.textContent = 'APTO';
-                statusPill.textContent = 'Producto seguro';
-                metaText.textContent = 'El análisis coincide con tu perfil activo: Carlos Diabético';
-            } else if (level === 'warning') {
-                cardBadge.textContent = 'RIESGO';
-                statusPill.textContent = 'Atención requerida';
-                metaText.textContent = 'El producto puede entrar en conflicto con tus restricciones.';
-            } else {
-                cardBadge.textContent = 'LISTO';
-                statusPill.textContent = 'Preparado';
-                metaText.textContent = 'Apunta la cámara y vuelve a escanear cuando quieras.';
-            }
-        }
-
-        async function captureFrame() {
-            if (!video.videoWidth || !video.videoHeight) {
-                throw new Error('La cámara todavía no está lista.');
-            }
-
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-            return new Promise((resolve, reject) => {
-                canvas.toBlob((blob) => {
-                    if (!blob) {
-                        reject(new Error('No se pudo capturar la imagen.'));
-                        return;
-                    }
-                    resolve(blob);
-                }, 'image/jpeg', 0.92);
-            });
-        }
-
-        async function startScan() {
-            if (isScanning) {
+        // Lógica de detección
+        const setupTarget = (id, name) => {
+            const el = document.getElementById(id);
+            if (!el) {
+                console.warn(`No se encontró el target ${id}; se omite su registro.`);
                 return;
             }
 
-            isScanning = true;
-            setLoading(true);
-            card.classList.remove('visible');
-            statusPill.textContent = 'Escaneando...';
+            el.addEventListener("targetFound", () => {
+                statusPill.textContent = "DETECTADO";
+                statusPill.classList.add('detected');
+                targetInfo.textContent = name;
+                arCard.classList.add('visible');
+                riskText.textContent = `Se ha detectado la ${name}. Presiona el botón para analizar.`;
+            });
+            el.addEventListener("targetLost", () => {
+                statusPill.textContent = "Escaneando";
+                statusPill.classList.remove('detected');
+                targetInfo.textContent = "Buscando etiqueta...";
+            });
+        };
+
+        setupTarget('target-ingredientes', 'Lista de Ingredientes');
+        setupTarget('target-tabla', 'Tabla Nutricional');
+
+        const sceneEl = document.querySelector('a-scene');
+        sceneEl.addEventListener('loaded', async () => {
+            try {
+                const mindarSystem = sceneEl.systems['mindar-image-system'];
+                if (mindarSystem && !mindarSystem.started) {
+                    await mindarSystem.start();
+                }
+            } catch (err) {
+                console.error('No se pudo iniciar MindAR automáticamente:', err);
+            }
+        });
+
+        async function startScan() {
+            const btn = document.getElementById('scan-button');
+            btn.disabled = true;
+            btn.textContent = "CONSULTANDO A GROQ...";
 
             try {
-                const blob = await captureFrame();
+                // Capturar el canvas de A-Frame
+                const scene = document.querySelector('a-scene');
+                const canvas = scene.components.screenshot.getCanvas('perspective');
+                
+                const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.9));
                 const formData = new FormData();
-                formData.append('image', blob, 'scan.jpg');
-                console.log('[CLIENT] Enviando imagen al backend...');
+                formData.append('image', blob, 'capture.jpg');
 
-                const response = await fetch(apiBaseUrl + '/api/analyze', {
-                    method: 'POST',
-                    headers: {
-                        'Accept': 'application/json',
-                        'ngrok-skip-browser-warning': 'true'
-                    },
-                    body: formData
-                });
-
-                console.log('[CLIENT] Respuesta recibida:', response.status, response.statusText);
-                const contentType = (response.headers.get('content-type') || '').toLowerCase();
-
-                if (!contentType.includes('application/json')) {
-                    const rawText = await response.text();
-                    console.error('[CLIENT] Respuesta no JSON:', rawText.slice(0, 300));
-                    throw new Error(
-                        'El endpoint no devolvio JSON. Revisa WEBAPP_URL/ngrok: ' +
-                        apiBaseUrl + '/api/health'
-                    );
-                }
-
+                const response = await fetch('/api/analyze', { method: 'POST', body: formData });
                 const data = await response.json();
-                console.log('[CLIENT] JSON parseado:', data);
-
-                if (data.status === 'error') {
-                    console.error('[CLIENT] Error del servidor:', data.error);
-                    throw new Error(data.error || 'El servidor devolvió un error.');
+                
+                if(data.status === 'success') {
+                    riskText.innerHTML = `<b>${data.display.title}:</b> ${data.display.message}`;
+                    arCard.style.borderTop = data.display.status === 'ok' ? "5px solid #44d19d" : "5px solid #ff5f6d";
                 }
-
-                if (!response.ok && data.status !== 'success') {
-                    console.error('[CLIENT] Respuesta no ok:', data);
-                    throw new Error(data.error || 'El backend devolvió un error.');
-                }
-
-                const display = data.display || {};
-                const level = display.status === 'ok' ? 'ok' : 'warning';
-                console.log('[CLIENT] Mostrando resultado:', level, display.title);
-                showResult(level, display.title || 'Resultado del análisis', display.message || 'Sin detalles.');
             } catch (err) {
-                console.error('[CLIENT] Excepción capturada:', err);
-                showResult('warning', 'Error de análisis', err.message || 'No se pudo completar el análisis.');
-                statusPill.textContent = 'Error';
+                console.error(err);
+                alert("Error en el análisis");
             } finally {
-                setLoading(false);
-                scanButton.textContent = 'RE-ESCANEAR';
-                isScanning = false;
+                btn.disabled = false;
+                btn.textContent = "RE-ESCANEAR";
             }
         }
 
-        initCamera();
+        window.addEventListener('camera-error', (error) => {
+            alert("Error de cámara: " + error.detail.message);
+        });
+        window.addEventListener('arReady', (event) => {
+            console.log("MindAR está listo");
+        });
     </script>
 </body>
 </html>
