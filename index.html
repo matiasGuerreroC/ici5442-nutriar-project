@@ -163,17 +163,61 @@
             }
         });
 
+        function getCameraVideoElement() {
+            const directMindarVideo = document.querySelector('video.mindar-video');
+            if (
+                directMindarVideo &&
+                directMindarVideo.srcObject &&
+                directMindarVideo.readyState >= 2 &&
+                directMindarVideo.videoWidth > 0 &&
+                directMindarVideo.videoHeight > 0
+            ) {
+                return directMindarVideo;
+            }
+
+            const candidates = Array.from(document.querySelectorAll('video')).filter(
+                v => v.srcObject && v.readyState >= 2 && v.videoWidth > 0 && v.videoHeight > 0
+            );
+
+            if (!candidates.length) return null;
+
+            return candidates.sort((a, b) => (b.videoWidth * b.videoHeight) - (a.videoWidth * a.videoHeight))[0];
+        }
+
+        async function captureCurrentFrameBlob() {
+            const video = getCameraVideoElement();
+            if (!video) {
+                throw new Error('No hay video de camara disponible para captura.');
+            }
+
+            const maxSide = 1600;
+            const scale = Math.min(1, maxSide / Math.max(video.videoWidth, video.videoHeight));
+            const targetW = Math.max(1, Math.round(video.videoWidth * scale));
+            const targetH = Math.max(1, Math.round(video.videoHeight * scale));
+
+            const captureCanvas = document.createElement('canvas');
+            captureCanvas.width = targetW;
+            captureCanvas.height = targetH;
+
+            const ctx = captureCanvas.getContext('2d', { alpha: false });
+            ctx.drawImage(video, 0, 0, targetW, targetH);
+
+            const blob = await new Promise(resolve => captureCanvas.toBlob(resolve, 'image/jpeg', 0.92));
+            if (!blob) {
+                throw new Error('No se pudo codificar la captura de camara.');
+            }
+
+            console.log(`[NutriAR] Captura real enviada desde video ${targetW}x${targetH}`);
+            return blob;
+        }
+
         async function startScan() {
             const btn = document.getElementById('scan-button');
             btn.disabled = true;
             btn.textContent = "CONSULTANDO A GROQ...";
 
             try {
-                // Capturar el canvas de A-Frame
-                const scene = document.querySelector('a-scene');
-                const canvas = scene.components.screenshot.getCanvas('perspective');
-                
-                const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.9));
+                const blob = await captureCurrentFrameBlob();
                 const formData = new FormData();
                 formData.append('image', blob, 'capture.jpg');
 

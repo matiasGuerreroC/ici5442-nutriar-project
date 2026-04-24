@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import json
 import os
 import socket
@@ -88,9 +89,61 @@ def procesar_imagen_para_groq(image_bytes):
     return f"data:image/jpeg;base64,{img_str}"
 
 
-def analizar_imagen(image_bytes):
+def registrar_metadata_imagen(image_bytes, origen="desconocido"):
+    try:
+        img = Image.open(BytesIO(image_bytes))
+        ancho, alto = img.size
+        modo = img.mode
+    except Exception:
+        ancho, alto, modo = -1, -1, "desconocido"
+
+    sha = hashlib.sha256(image_bytes).hexdigest()[:16]
+    print(
+        f"[{datetime.now().strftime('%H:%M:%S')}] 🧪 Input imagen ({origen}) "
+        f"bytes={len(image_bytes)} size={ancho}x{alto} mode={modo} sha16={sha}"
+    )
+
+
+def extraer_transcripcion_imagen(base64_image):
+    try:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] 📝 Solicitando transcripcion OCR al modelo...")
+        ocr_completion = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Transcribe literalmente el texto visible en la imagen. "
+                        "No inventes contenido. Si no se puede leer, responde exactamente: [ILEGIBLE]."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Extrae todo el texto legible de esta etiqueta."},
+                        {"type": "image_url", "image_url": {"url": base64_image}},
+                    ],
+                },
+            ],
+            model=MODELO_VISION,
+            temperature=0,
+            max_tokens=700,
+        )
+        transcripcion = (ocr_completion.choices[0].message.content or "").strip()
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] 🧾 OCR detectado:")
+        print("-" * 30)
+        print(transcripcion)
+        print("-" * 30)
+        return transcripcion
+    except Exception as ocr_exc:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ No se pudo obtener OCR: {ocr_exc}")
+        return ""
+
+
+def analizar_imagen(image_bytes, origen="desconocido"):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] ⚙️ Procesando imagen compartida con el backend web...")
+    registrar_metadata_imagen(image_bytes, origen)
     base64_image = procesar_imagen_para_groq(image_bytes)
+    transcripcion = extraer_transcripcion_imagen(base64_image)
 
     print(f"[{datetime.now().strftime('%H:%M:%S')}] 🚀 Enviando prompt e imagen a la API de Groq (Modelo: {MODELO_VISION})...")
     chat_completion = client.chat.completions.create(
@@ -115,7 +168,9 @@ def analizar_imagen(image_bytes):
     print(resultado_json)
     print("-" * 30)
 
-    return json.loads(resultado_json)
+    datos = json.loads(resultado_json)
+    datos["_transcripcion_detectada"] = transcripcion
+    return datos
 
 
 def construir_respuesta_humana(datos):
@@ -178,7 +233,7 @@ async def analizar_desde_web(image: UploadFile = File(None), image_base64: str =
             print(f"[{datetime.now().strftime('%H:%M:%S')}] 📥 Bytes recibidos: {len(image_bytes)}")
             
             try:
-                datos = analizar_imagen(image_bytes)
+                datos = analizar_imagen(image_bytes, origen="web_archivo")
             except json.JSONDecodeError as je:
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ JSONDecodeError: {str(je)}")
                 return {"error": "La LLM no devolvió JSON válido. Intenta de nuevo.", "status": "error"}
@@ -189,15 +244,21 @@ async def analizar_desde_web(image: UploadFile = File(None), image_base64: str =
                 image_base64 = image_base64.split(",", 1)[1]
             image_bytes = base64.b64decode(image_base64)
             print(f"[{datetime.now().strftime('%H:%M:%S')}] 📥 Base64 decodificado, {len(image_bytes)} bytes")
-            datos = analizar_imagen(image_bytes)
+            datos = analizar_imagen(image_bytes, origen="web_base64")
         else:
             print(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ Ni archivo ni base64 recibidos")
             return {"error": "Debes enviar un archivo image o image_base64", "status": "error"}
 
+        transcripcion = datos.pop("_transcripcion_detectada", "")
         respuesta = construir_respuesta_humana(datos)
         duracion = (datetime.now() - inicio).total_seconds()
         print(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ Análisis completado en {duracion:.2f}s, enviando JSON")
-        return {"analysis": datos, "display": respuesta, "status": "success"}
+        return {
+            "analysis": datos,
+            "display": respuesta,
+            "debug": {"transcripcion_imagen": transcripcion},
+            "status": "success",
+        }
         
     except HTTPException as e:
         print(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ HTTPException: {e.detail}")
@@ -235,7 +296,8 @@ def analizar_etiqueta(message):
     try:
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
-        datos = analizar_imagen(downloaded_file)
+        datos = analizar_imagen(downloaded_file, origen="telegram_photo")
+        datos.pop("_transcripcion_detectada", None)
         respuesta = formatear_respuesta_telegram(datos)
         print(f"[{datetime.now().strftime('%H:%M:%S')}] 📱 Formateando respuesta y enviando a Telegram...")
         bot.edit_message_text(respuesta, chat_id=message.chat.id, message_id=msg_espera.message_id, parse_mode="HTML")
