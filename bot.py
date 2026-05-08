@@ -123,9 +123,6 @@ def procesar_imagen_para_groq(image_bytes):
     return f"data:image/jpeg;base64,{img_str}"
 
 
-def analizar_imagen(image_bytes, usuario: Usuario = None):
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] ⚙️ Procesando imagen...")
-    base64_image = procesar_imagen_para_groq(image_bytes)
 def analizar_imagen(image_bytes, usuario: Usuario):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] ⚙️ Procesando imagen...")
     base64_image = procesar_imagen_para_groq(image_bytes)
@@ -152,28 +149,6 @@ def analizar_imagen(image_bytes, usuario: Usuario):
 
     resultado_json = chat_completion.choices[0].message.content
     print(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ ¡Respuesta recibida de Groq!")
-    return json.loads(resultado_json)
-    # AQUÍ ESTÁ LA MAGIA: Inyectamos al usuario real de la BD
-    system_prompt = obtener_prompt_sistema(usuario)
-
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] 🚀 Enviando a Groq con perfil de BD...")
-    chat_completion = client.chat.completions.create(
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content":[
-                    {"type": "text", "text": "Analiza esta etiqueta y dame el JSON."},
-                    {"type": "image_url", "image_url": {"url": base64_image}},
-                ],
-            },
-        ],
-        model=MODELO_VISION,
-        response_format={"type": "json_object"},
-        temperature=0.1,
-    )
-
-    resultado_json = chat_completion.choices[0].message.content
     return json.loads(resultado_json)
 
 

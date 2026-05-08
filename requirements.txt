@@ -6,3 +6,5 @@ fastapi
 uvicorn[standard]
 python-multipart
 requests
+sqlalchemy
+psycopg2-binary
