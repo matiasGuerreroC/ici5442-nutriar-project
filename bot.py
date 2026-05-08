@@ -3,18 +3,24 @@ import json
 import os
 import socket
 import threading
+import requests
 from datetime import datetime
 from html import escape
 from io import BytesIO
 
 import telebot
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, UploadFile, HTTPException
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from groq import Groq
 from PIL import Image
 from telebot import types
+from sqlalchemy.orm import Session
+
+# Importar BD y modelos
+from backend.database import SessionLocal, get_db
+from backend.models import Usuario, HistorialProducto
 
 load_dotenv()
 
@@ -50,26 +56,59 @@ app.add_middleware(
 #     "alergias": ["Maní", "Leche"],
 #     "preferencias": ["Sin azúcar añadida"]
 # }
-perfil_usuario = {
-    "nombre": "Carlos Diabético",
-    "condiciones_medicas": ["Diabetes Tipo 2", "Intolerancia a la Lactosa"],
-    "alergias": ["Ninguna"],
-    "preferencias": ["Cero azúcar añadida", "Sin derivados de la leche"],
-}
+#perfil_usuario = {
+#    "nombre": "Carlos Diabético",
+#    "condiciones_medicas": ["Diabetes Tipo 2", "Intolerancia a la Lactosa"],
+#    "alergias": ["Ninguna"],
+#    "preferencias": ["Cero azúcar añadida", "Sin derivados de la leche"],
+#}
 
 
-def obtener_prompt_sistema():
+def obtener_o_crear_usuario(telegram_id: str, nombre: str = None):
+    """Obtiene un usuario de la BD o lo crea si no existe"""
+    db = SessionLocal()
+    try:
+        usuario = db.query(Usuario).filter(Usuario.telegram_id == str(telegram_id)).first()
+        if not usuario:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] 👤 Registrando nuevo usuario: {nombre}")
+            usuario = Usuario(telegram_id=str(telegram_id), nombre=nombre or "Usuario")
+            db.add(usuario)
+            db.commit()
+            db.refresh(usuario)
+        
+        # 🛠️ LA SOLUCIÓN: "Tocamos" la relación de restricciones.
+        # Esto obliga a SQLAlchemy a descargar las alergias y guardarlas 
+        # en memoria RAM ANTES de que db.close() corte el internet con Neon.
+        _ = usuario.restricciones
+        
+        return usuario
+    finally:
+        db.close()
+
+def obtener_prompt_sistema(usuario: Usuario):
+    """Genera el System Prompt dinámico leyendo la BD de Neon"""
+    
+    if usuario and usuario.restricciones:
+        # Extraer los nombres de las restricciones reales de la BD
+        lista_restricciones =[r.nombre for r in usuario.restricciones]
+        contexto_medico = f"ATENCIÓN: El usuario tiene las siguientes condiciones médicas/dietéticas: {', '.join(lista_restricciones)}."
+    else:
+        contexto_medico = "El usuario no tiene restricciones médicas registradas. Realiza un análisis nutricional general."
+
     return f"""
-    Eres un asistente experto en lectura de etiquetas nutricionales.
-    Analiza los ingredientes de la imagen considerando las restricciones del usuario: {json.dumps(perfil_usuario, ensure_ascii=False)}.
+    Eres un asistente experto en salud y lectura de etiquetas nutricionales.
+    {contexto_medico}
+    
+    Analiza los ingredientes y la tabla nutricional de la imagen adjunta.
+    Cruza la información de la imagen con las condiciones del usuario para determinar si es apto.
+    
     DEBES responder ÚNICAMENTE en formato JSON con la siguiente estructura exacta:
     {{
         "es_apto": booleano,
-        "ingredientes_peligrosos": ["lista", "de", "ingredientes"],
-        "razon": "Explicación muy breve"
+        "ingredientes_peligrosos":["lista", "de", "ingredientes", "que", "hacen", "daño"],
+        "razon": "Explicación breve de por qué es o no es apto"
     }}
     """
-
 
 def procesar_imagen_para_groq(image_bytes):
     """
@@ -84,17 +123,23 @@ def procesar_imagen_para_groq(image_bytes):
     return f"data:image/jpeg;base64,{img_str}"
 
 
-def analizar_imagen(image_bytes):
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] ⚙️ Procesando imagen compartida con el backend web...")
+def analizar_imagen(image_bytes, usuario: Usuario = None):
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] ⚙️ Procesando imagen...")
+    base64_image = procesar_imagen_para_groq(image_bytes)
+def analizar_imagen(image_bytes, usuario: Usuario):
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] ⚙️ Procesando imagen...")
     base64_image = procesar_imagen_para_groq(image_bytes)
 
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] 🚀 Enviando prompt e imagen a la API de Groq (Modelo: {MODELO_VISION})...")
+    # AQUÍ ESTÁ LA MAGIA: Inyectamos el perfil real de la BD
+    system_prompt = obtener_prompt_sistema(usuario)
+
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] 🚀 Enviando a Groq con perfil de BD...")
     chat_completion = client.chat.completions.create(
         messages=[
-            {"role": "system", "content": obtener_prompt_sistema()},
+            {"role": "system", "content": system_prompt},
             {
                 "role": "user",
-                "content": [
+                "content":[
                     {"type": "text", "text": "Analiza esta etiqueta y dame el JSON."},
                     {"type": "image_url", "image_url": {"url": base64_image}},
                 ],
@@ -106,11 +151,29 @@ def analizar_imagen(image_bytes):
     )
 
     resultado_json = chat_completion.choices[0].message.content
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ ¡Respuesta recibida de Groq! JSON Crudo:")
-    print("-" * 30)
-    print(resultado_json)
-    print("-" * 30)
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ ¡Respuesta recibida de Groq!")
+    return json.loads(resultado_json)
+    # AQUÍ ESTÁ LA MAGIA: Inyectamos al usuario real de la BD
+    system_prompt = obtener_prompt_sistema(usuario)
 
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] 🚀 Enviando a Groq con perfil de BD...")
+    chat_completion = client.chat.completions.create(
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content":[
+                    {"type": "text", "text": "Analiza esta etiqueta y dame el JSON."},
+                    {"type": "image_url", "image_url": {"url": base64_image}},
+                ],
+            },
+        ],
+        model=MODELO_VISION,
+        response_format={"type": "json_object"},
+        temperature=0.1,
+    )
+
+    resultado_json = chat_completion.choices[0].message.content
     return json.loads(resultado_json)
 
 
@@ -162,53 +225,75 @@ async def healthcheck():
     return {"status": "ok", "message": "Backend NutriAR activo"}
 
 
+@app.post("/api/registrar_usuario")
+async def registrar_usuario(telegram_id: str, nombre: str = "Usuario"):
+    """Endpoint para registrar/obtener usuario desde el WebApp"""
+    usuario = obtener_o_crear_usuario(telegram_id=telegram_id, nombre=nombre)
+    return {
+        "id": usuario.id,
+        "telegram_id": usuario.telegram_id,
+        "nombre": usuario.nombre,
+        "status": "success"
+    }
+
+
 @app.post("/api/analyze")
-async def analizar_desde_web(image: UploadFile = File(None), image_base64: str = Form(None)):
+async def analizar_desde_web(image: UploadFile = File(None), image_base64: str = Form(None), telegram_id: str = Form(None)):
     inicio = datetime.now()
+    db = None
     try:
         print(f"[{datetime.now().strftime('%H:%M:%S')}] 📥 POST /api/analyze recibido")
         
+        # 1. OBTENER USUARIO PRIMERO (Para saber sus alergias antes de analizar)
+        if not telegram_id:
+            return {"error": "Falta telegram_id para identificar al usuario", "status": "error"}
+        usuario = obtener_o_crear_usuario(telegram_id=telegram_id)
+        
+        # 2. PROCESAR IMAGEN Y ANALIZAR CON IA
         if image:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] 📥 Leyendo archivo: {image.filename}")
             image_bytes = await image.read()
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] 📥 Bytes recibidos: {len(image_bytes)}")
-            
-            try:
-                datos = analizar_imagen(image_bytes)
-            except json.JSONDecodeError as je:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ JSONDecodeError: {str(je)}")
-                return {"error": "La LLM no devolvió JSON válido. Intenta de nuevo.", "status": "error"}
-                
+            datos = analizar_imagen(image_bytes, usuario=usuario)
         elif image_base64:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] 📥 Base64 recibido, decodificando...")
             if "," in image_base64:
                 image_base64 = image_base64.split(",", 1)[1]
             image_bytes = base64.b64decode(image_base64)
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] 📥 Base64 decodificado, {len(image_bytes)} bytes")
-            datos = analizar_imagen(image_bytes)
+            datos = analizar_imagen(image_bytes, usuario=usuario)
         else:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ Ni archivo ni base64 recibidos")
-            return {"error": "Debes enviar un archivo image o image_base64", "status": "error"}
+            return {"error": "Debes enviar image o image_base64", "status": "error"}
 
+        # 3. GUARDAR EN EL HISTORIAL (NEON DB)
+        db = SessionLocal()
+        nuevo_historial = HistorialProducto(
+            usuario_id=usuario.id,
+            desc_breve_producto="Escaneo desde WebApp",
+            es_apto=datos.get("es_apto", False),
+            ingredientes_peligrosos=datos.get("ingredientes_peligrosos",[]),
+            razon_alerta=datos.get("razon", ""),
+            respuesta_json_llm=datos
+        )
+        db.add(nuevo_historial)
+        db.commit()
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] 💾 Análisis guardado en BD")
+
+        # 4. RESPONDER AL FRONTEND
         respuesta = construir_respuesta_humana(datos)
-        duracion = (datetime.now() - inicio).total_seconds()
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ Análisis completado en {duracion:.2f}s, enviando JSON")
         return {"analysis": datos, "display": respuesta, "status": "success"}
         
-    except HTTPException as e:
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ HTTPException: {e.detail}")
-        raise
     except Exception as exc:
-        import traceback
-        error_msg = str(exc)
-        traceback_str = traceback.format_exc()
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ Error no manejado: {error_msg}")
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] 📋 Traceback:\n{traceback_str}")
-        return {"error": f"Error procesando imagen: {error_msg}", "status": "error"}
-
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ Error: {str(exc)}")
+        return {"error": str(exc), "status": "error"}
+    finally:
+        if db:
+            db.close()
 
 @bot.message_handler(commands=["start", "help"])
 def enviar_bienvenida(message):
+    # Registrar/obtener usuario en BD
+    usuario = obtener_o_crear_usuario(
+        telegram_id=message.from_user.id,
+        nombre=message.from_user.first_name or "Usuario"
+    )
+    
     markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
     web_app = types.WebAppInfo(WEBAPP_URL)
     btn = types.KeyboardButton(text="🚀 Abrir Escáner NutriAR", web_app=web_app)
@@ -228,10 +313,32 @@ def analizar_etiqueta(message):
     print(f"\n[{datetime.now().strftime('%H:%M:%S')}] 📸 ¡Foto recibida de {message.from_user.first_name}! Descargando...")
     msg_espera = bot.reply_to(message, "🔍 Analizando etiqueta con Llama-4-Scout en Groq... (Esto tomará un segundo ⚡)")
 
+    db = None
     try:
+        # Obtener/registrar usuario en BD
+        usuario = obtener_o_crear_usuario(
+            telegram_id=message.from_user.id,
+            nombre=message.from_user.first_name or "Usuario"
+        )
+        
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
-        datos = analizar_imagen(downloaded_file)
+        datos = analizar_imagen(downloaded_file, usuario=usuario)
+        
+        # Guardar en historial de BD
+        db = SessionLocal()
+        nuevo_historial = HistorialProducto(
+            usuario_id=usuario.id,
+            desc_breve_producto="Escaneo desde Telegram",
+            es_apto=datos.get("es_apto", False),
+            ingredientes_peligrosos=datos.get("ingredientes_peligrosos", []),
+            razon_alerta=datos.get("razon", ""),
+            respuesta_json_llm=datos
+        )
+        db.add(nuevo_historial)
+        db.commit()
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] 💾 Análisis guardado en BD")
+        
         respuesta = formatear_respuesta_telegram(datos)
         print(f"[{datetime.now().strftime('%H:%M:%S')}] 📱 Formateando respuesta y enviando a Telegram...")
         bot.edit_message_text(respuesta, chat_id=message.chat.id, message_id=msg_espera.message_id, parse_mode="HTML")
@@ -240,6 +347,9 @@ def analizar_etiqueta(message):
     except Exception as e:
         print(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ ERROR CRÍTICO: {str(e)}\n")
         bot.edit_message_text(f"❌ Ocurrió un error al procesar la imagen: {str(e)}", chat_id=message.chat.id, message_id=msg_espera.message_id)
+    finally:
+        if db:
+            db.close()
 
 
 def iniciar_servidor_web():
