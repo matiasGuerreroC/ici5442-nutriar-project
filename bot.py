@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 # Importar BD y modelos
 from backend.database import SessionLocal, get_db
-from backend.models import Usuario, HistorialProducto
+from backend.models import Usuario, HistorialProducto, Restriccion
 
 load_dotenv()
 
@@ -62,6 +62,46 @@ app.add_middleware(
 #    "alergias": ["Ninguna"],
 #    "preferencias": ["Cero azúcar añadida", "Sin derivados de la leche"],
 #}
+
+
+# --- RESTRICCIONES PREDEFINIDAS ---
+RESTRICCIONES_PREDEFINIDAS = {
+    "celiaquia": {"nombre": "Celiaquía", "tipo": "condicion_medica"},
+    "diabetes": {"nombre": "Diabetes Tipo 2", "tipo": "condicion_medica"},
+    "intolerancia_lactosa": {"nombre": "Intolerancia a la Lactosa", "tipo": "condicion_medica"},
+    "alergia_mani": {"nombre": "Alergia a Maní", "tipo": "alergia"},
+    "alergia_leche": {"nombre": "Alergia a Leche", "tipo": "alergia"},
+    "alergia_huevo": {"nombre": "Alergia a Huevo", "tipo": "alergia"},
+    "alergia_pescado": {"nombre": "Alergia a Pescado", "tipo": "alergia"},
+    "alergia_mariscos": {"nombre": "Alergia a Mariscos", "tipo": "alergia"},
+    "alergia_frutos_secos": {"nombre": "Alergia a Frutos Secos", "tipo": "alergia"},
+    "sin_azucar": {"nombre": "Preferencia: Sin Azúcar Añadida", "tipo": "preferencia"},
+    "sin_gluten": {"nombre": "Preferencia: Sin Gluten", "tipo": "preferencia"},
+    "vegano": {"nombre": "Preferencia: Vegano", "tipo": "preferencia"},
+    "vegetariano": {"nombre": "Preferencia: Vegetariano", "tipo": "preferencia"},
+}
+
+
+def inicializar_restricciones():
+    """Crea las restricciones predefinidas en la BD si no existen"""
+    db = SessionLocal()
+    try:
+        for key, restriccion in RESTRICCIONES_PREDEFINIDAS.items():
+            existe = db.query(Restriccion).filter(
+                Restriccion.nombre == restriccion["nombre"]
+            ).first()
+            if not existe:
+                nueva = Restriccion(
+                    nombre=restriccion["nombre"],
+                    tipo=restriccion["tipo"]
+                )
+                db.add(nueva)
+        db.commit()
+    except Exception as e:
+        print(f"[ERROR] No se pudieron inicializar restricciones: {e}")
+    finally:
+        db.close()
+
 
 
 def obtener_o_crear_usuario(telegram_id: str, nombre: str = None):
@@ -200,6 +240,86 @@ async def healthcheck():
     return {"status": "ok", "message": "Backend NutriAR activo"}
 
 
+@app.get("/api/restricciones")
+async def obtener_restricciones():
+    """Obtiene todas las restricciones disponibles agrupadas por tipo"""
+    db = SessionLocal()
+    try:
+        restricciones = db.query(Restriccion).all()
+        agrupadas = {
+            "condiciones_medicas": [
+                {"id": r.id, "nombre": r.nombre}
+                for r in restricciones if r.tipo == "condicion_medica"
+            ],
+            "alergias": [
+                {"id": r.id, "nombre": r.nombre}
+                for r in restricciones if r.tipo == "alergia"
+            ],
+            "preferencias": [
+                {"id": r.id, "nombre": r.nombre}
+                for r in restricciones if r.tipo == "preferencia"
+            ],
+        }
+        return {"status": "success", "restricciones": agrupadas}
+    finally:
+        db.close()
+
+
+@app.get("/api/usuario/{telegram_id}")
+async def obtener_usuario(telegram_id: str):
+    """Obtiene el perfil del usuario y sus restricciones"""
+    usuario = obtener_o_crear_usuario(telegram_id=telegram_id)
+    db = SessionLocal()
+    try:
+        restricciones = [
+            {"id": r.id, "nombre": r.nombre, "tipo": r.tipo}
+            for r in usuario.restricciones
+        ]
+        return {
+            "status": "success",
+            "usuario": {
+                "id": usuario.id,
+                "telegram_id": usuario.telegram_id,
+                "nombre": usuario.nombre,
+                "fecha_registro": usuario.fecha_registro.isoformat() if usuario.fecha_registro else None,
+                "restricciones": restricciones
+            }
+        }
+    finally:
+        db.close()
+
+
+@app.post("/api/usuario/{telegram_id}/restricciones")
+async def agregar_restriccion_usuario(telegram_id: str, restriccion_id: int):
+    """Agrega una restricción al usuario"""
+    db = SessionLocal()
+    try:
+        usuario = obtener_o_crear_usuario(telegram_id=telegram_id)
+        restriccion = db.query(Restriccion).filter(Restriccion.id == restriccion_id).first()
+        
+        if not restriccion:
+            return {"status": "error", "error": "Restricción no encontrada", "codigo": 404}
+        
+        if restriccion not in usuario.restricciones:
+            usuario.restricciones.append(restriccion)
+            db.commit()
+            return {
+                "status": "success",
+                "message": f"Restricción '{restriccion.nombre}' agregada",
+                "restriccion": {"id": restriccion.id, "nombre": restriccion.nombre}
+            }
+        else:
+            return {
+                "status": "error",
+                "error": "Esta restricción ya está en tu perfil",
+                "codigo": 409
+            }
+    except Exception as e:
+        return {"status": "error", "error": str(e), "codigo": 500}
+    finally:
+        db.close()
+
+
 @app.post("/api/registrar_usuario")
 async def registrar_usuario(telegram_id: str, nombre: str = "Usuario"):
     """Endpoint para registrar/obtener usuario desde el WebApp"""
@@ -269,18 +389,90 @@ def enviar_bienvenida(message):
         nombre=message.from_user.first_name or "Usuario"
     )
     
+    db = SessionLocal()
+    try:
+        # Verificar si el usuario tiene restricciones configuradas
+        tiene_restricciones = len(usuario.restricciones) > 0
+    finally:
+        db.close()
+    
     markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
     web_app = types.WebAppInfo(WEBAPP_URL)
-    btn = types.KeyboardButton(text="🚀 Abrir Escáner NutriAR", web_app=web_app)
-    markup.add(btn)
+    btn_scanner = types.KeyboardButton(text="🚀 Abrir Escáner NutriAR", web_app=web_app)
+    btn_perfil = types.KeyboardButton(text="👤 Configurar Perfil")
+    
+    markup.add(btn_scanner)
+    markup.add(btn_perfil)
+
+    if tiene_restricciones:
+        mensaje = (
+            f"👋 ¡Hola {usuario.nombre}!\n\n"
+            f"✓ Tu perfil está configurado.\n\n"
+            f"Puedes:\n"
+            f"• Usar el <b>Escáner NutriAR</b> para analizar productos\n"
+            f"• Enviarme fotos de etiquetas directamente\n"
+            f"• Actualizar tu perfil en cualquier momento"
+        )
+    else:
+        mensaje = (
+            f"👋 ¡Hola {usuario.nombre}!\n\n"
+            f"⚠️ Primero, <b>configura tu perfil</b> con tus restricciones dietéticas y alergias.\n\n"
+            f"Así podré personalizarte los análisis de productos."
+        )
 
     bot.reply_to(
         message,
-        "👋 ¡Bienvenido a NutriAR!\n\n"
-        "Puedes enviarme una foto para un análisis detallado o "
-        "usar el nuevo escáner en Realidad Aumentada.",
+        mensaje,
         reply_markup=markup,
+        parse_mode="HTML"
     )
+
+
+@bot.message_handler(func=lambda message: message.text == "👤 Configurar Perfil")
+def boton_perfil(message):
+    """Handler para el botón de configurar perfil"""
+    configurar_perfil(message)
+
+
+@bot.message_handler(func=lambda message: message.text == "🚀 Abrir Escáner NutriAR")
+def boton_scanner(message):
+    """Handler para el botón de escáner"""
+    usuario = obtener_o_crear_usuario(
+        telegram_id=message.from_user.id,
+        nombre=message.from_user.first_name or "Usuario"
+    )
+    
+    db = SessionLocal()
+    try:
+        tiene_restricciones = len(usuario.restricciones) > 0
+    finally:
+        db.close()
+    
+    if not tiene_restricciones:
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("Configurar ahora", callback_data="ir_perfil"))
+        bot.reply_to(
+            message,
+            "⚠️ Primero configura tu perfil para personalizados análisis.",
+            reply_markup=markup
+        )
+    else:
+        markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+        web_app = types.WebAppInfo(WEBAPP_URL)
+        btn = types.KeyboardButton(text="🚀 Abrir Escáner NutriAR", web_app=web_app)
+        markup.add(btn)
+        bot.send_message(
+            message.chat.id,
+            "🚀 Abriendo escáner...",
+            reply_markup=markup
+        )
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "ir_perfil")
+def ir_perfil_callback(call):
+    """Redirige al usuario al comando /agregar_restriccion"""
+    bot.answer_callback_query(call.id)
+    agregar_restriccion(call.message)
 
 
 @bot.message_handler(content_types=["photo"])
@@ -327,6 +519,137 @@ def analizar_etiqueta(message):
             db.close()
 
 
+@bot.message_handler(commands=["perfil"])
+def configurar_perfil(message):
+    """Muestra el perfil actual y permite al usuario agregar/quitar restricciones"""
+    db = SessionLocal()
+    try:
+        usuario = obtener_o_crear_usuario(
+            telegram_id=message.from_user.id,
+            nombre=message.from_user.first_name or "Usuario"
+        )
+        
+        # Mostrar restricciones actuales
+        restricciones = usuario.restricciones
+        if restricciones:
+            lista_restricciones = "\n".join([f"✓ {r.nombre}" for r in restricciones])
+            texto = (
+                f"👤 <b>Perfil de {usuario.nombre}</b>\n\n"
+                f"<b>Tus restricciones:</b>\n{lista_restricciones}\n\n"
+                f"<b>Para agregar más restricciones, usa:</b>\n"
+                f"/agregar_restriccion"
+            )
+        else:
+            texto = (
+                f"👤 <b>Perfil de {usuario.nombre}</b>\n\n"
+                f"Aún no tienes restricciones configuradas.\n\n"
+                f"<b>Para agregar tus primeras restricciones, usa:</b>\n"
+                f"/agregar_restriccion"
+            )
+        
+        bot.reply_to(message, texto, parse_mode="HTML")
+    finally:
+        db.close()
+
+
+@bot.message_handler(commands=["agregar_restriccion"])
+def agregar_restriccion(message):
+    """Permite al usuario seleccionar restricciones de una lista predefinida"""
+    db = SessionLocal()
+    try:
+        usuario = obtener_o_crear_usuario(
+            telegram_id=message.from_user.id,
+            nombre=message.from_user.first_name or "Usuario"
+        )
+        
+        # Obtener restricciones disponibles
+        todas_restricciones = db.query(Restriccion).all()
+        restricciones_usuario = {r.id for r in usuario.restricciones}
+        
+        # Agrupar por tipo
+        condiciones = [r for r in todas_restricciones if r.tipo == "condicion_medica" and r.id not in restricciones_usuario]
+        alergias = [r for r in todas_restricciones if r.tipo == "alergia" and r.id not in restricciones_usuario]
+        preferencias = [r for r in todas_restricciones if r.tipo == "preferencia" and r.id not in restricciones_usuario]
+        
+        # Crear teclado interactivo con InlineKeyboardMarkup
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        
+        if condiciones:
+            markup.row(types.InlineKeyboardButton("🏥 CONDICIONES MÉDICAS", callback_data="header"))
+            for r in condiciones:
+                markup.row(types.InlineKeyboardButton(f"✦ {r.nombre}", callback_data=f"add_restriccion_{r.id}"))
+        
+        if alergias:
+            markup.row(types.InlineKeyboardButton("⚠️ ALERGIAS", callback_data="header"))
+            for r in alergias:
+                markup.row(types.InlineKeyboardButton(f"✦ {r.nombre}", callback_data=f"add_restriccion_{r.id}"))
+        
+        if preferencias:
+            markup.row(types.InlineKeyboardButton("🌱 PREFERENCIAS", callback_data="header"))
+            for r in preferencias:
+                markup.row(types.InlineKeyboardButton(f"✦ {r.nombre}", callback_data=f"add_restriccion_{r.id}"))
+        
+        markup.row(types.InlineKeyboardButton("✅ Listo", callback_data="perfil_listo"))
+        
+        if not condiciones and not alergias and not preferencias:
+            bot.reply_to(message, "✅ ¡Ya tienes todas las restricciones disponibles agregadas!")
+        else:
+            bot.send_message(
+                message.chat.id,
+                "📋 Selecciona las restricciones que aplican a tu perfil:\n\n"
+                "(Puedes seleccionar varias)",
+                reply_markup=markup
+            )
+    finally:
+        db.close()
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("add_restriccion_"))
+def agregar_restriccion_callback(call):
+    """Agrega una restricción al usuario cuando hace clic"""
+    db = SessionLocal()
+    try:
+        restriccion_id = int(call.data.split("_")[-1])
+        usuario = obtener_o_crear_usuario(
+            telegram_id=call.from_user.id,
+            nombre=call.from_user.first_name or "Usuario"
+        )
+        
+        restriccion = db.query(Restriccion).filter(Restriccion.id == restriccion_id).first()
+        if restriccion and restriccion not in usuario.restricciones:
+            usuario.restricciones.append(restriccion)
+            db.commit()
+            bot.answer_callback_query(call.id, f"✓ {restriccion.nombre} añadida", show_alert=False)
+            # Recargar el mensaje para mostrar la restricción agregada
+            bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=call.message.reply_markup)
+        else:
+            bot.answer_callback_query(call.id, "Esta restricción ya está en tu perfil", show_alert=False)
+    except Exception as e:
+        print(f"[ERROR] {e}")
+        bot.answer_callback_query(call.id, "Error al agregar restricción", show_alert=True)
+    finally:
+        db.close()
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "perfil_listo")
+def perfil_listo(call):
+    """Finaliza la configuración del perfil"""
+    bot.answer_callback_query(call.id)
+    bot.edit_message_text(
+        "✅ ¡Perfil configurado! Ya puedes usar el escáner con tus restricciones personalizadas.\n\n"
+        "🚀 Usa /start para abrir el escáner",
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id
+    )
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "header")
+def header_callback(call):
+    """Ignora los clics en los headers"""
+    bot.answer_callback_query(call.id)
+
+
+
 def iniciar_servidor_web():
     import uvicorn
     print(f"🌐 Servidor FastAPI de NutriAR iniciado en http://127.0.0.1:{PORT}")
@@ -346,6 +669,9 @@ if __name__ == "__main__":
             f"y vuelve a ejecutar 'python bot.py'."
         )
 
+    print("📋 Inicializando restricciones en BD...")
+    inicializar_restricciones()
+    
     print("🤖 Bot de NutriAR iniciado. Esperando mensajes...")
     thread_web = threading.Thread(target=iniciar_servidor_web, daemon=True)
     thread_web.start()

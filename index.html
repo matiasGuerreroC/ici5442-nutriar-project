@@ -311,10 +311,22 @@
 
         let cameraStream = null;
         let isScanning = false;
+        let telegramId = null;
+        let userName = null;
 
         if (window.Telegram && window.Telegram.WebApp) {
             window.Telegram.WebApp.ready();
             window.Telegram.WebApp.expand();
+            
+            // Extraer telegram_id del initData
+            const initData = new URLSearchParams(window.Telegram.WebApp.initData);
+            const user = initData.get('user');
+            if (user) {
+                const userData = JSON.parse(user);
+                telegramId = userData.id;
+                userName = userData.first_name || userData.username || 'Usuario';
+                console.log('[TELEGRAM] User ID:', telegramId, 'Name:', userName);
+            }
         }
 
         async function initCamera() {
@@ -403,7 +415,14 @@
                 const blob = await captureFrame();
                 const formData = new FormData();
                 formData.append('image', blob, 'scan.jpg');
-                console.log('[CLIENT] Enviando imagen al backend...');
+                
+                // Enviar telegram_id para identificar al usuario
+                if (telegramId) {
+                    formData.append('telegram_id', telegramId);
+                    console.log('[CLIENT] Enviando imagen con telegram_id:', telegramId);
+                } else {
+                    console.warn('[CLIENT] telegram_id no disponible, continuando sin identificación');
+                }
 
                 const response = await fetch(apiBaseUrl + '/api/analyze', {
                     method: 'POST',
