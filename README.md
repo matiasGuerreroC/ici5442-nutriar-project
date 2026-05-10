@@ -10,6 +10,7 @@
    GROQ_API_KEY="tu_api_key"
    WEBAPP_URL="https://tu-url-publica/"
    PORT=8000
+   DATABASE_URL="NUTRIBASEDB"
    ```
 
 ## Ejecución local

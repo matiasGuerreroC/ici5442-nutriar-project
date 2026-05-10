@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>NutriAR Scanner</title>
@@ -45,7 +46,9 @@
             flex-direction: column;
             justify-content: space-between;
             pointer-events: none;
-            padding: 16px;
+            padding: 10px 12px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
         }
 
         .top-bar {
@@ -54,11 +57,12 @@
             justify-content: space-between;
             align-items: center;
             gap: 12px;
-            padding: 12px 14px;
+            padding: 10px 12px;
             border-radius: 18px;
             background: linear-gradient(180deg, rgba(8, 18, 32, 0.78), rgba(8, 18, 32, 0.52));
             backdrop-filter: blur(14px);
             box-shadow: var(--shadow);
+            flex-shrink: 0;
         }
 
         .brand {
@@ -76,6 +80,7 @@
         .helper {
             font-size: 12px;
             color: var(--muted);
+            margin: 0;
         }
 
         .status-pill {
@@ -94,12 +99,14 @@
             align-items: center;
             justify-content: center;
             flex: 1;
-            margin: 18px 0;
+            margin: 12px 0;
+            min-height: 300px;
+            max-height: 45vh;
         }
 
         .scan-frame {
-            width: min(88vw, 420px);
-            height: min(54vh, 460px);
+            width: min(88vw, 380px);
+            height: min(50vh, 400px);
             border-radius: 28px;
             border: 1px solid rgba(255, 255, 255, 0.16);
             box-shadow:
@@ -138,6 +145,8 @@
             pointer-events: auto;
             display: grid;
             gap: 12px;
+            flex-shrink: 0;
+            margin-top: auto;
         }
 
         #ar-card {
@@ -145,7 +154,7 @@
             backdrop-filter: blur(16px);
             color: var(--text);
             width: 100%;
-            padding: 18px;
+            padding: 14px;
             border-radius: 22px;
             text-align: left;
             box-shadow: var(--shadow);
@@ -314,19 +323,55 @@
         let telegramId = null;
         let userName = null;
 
+        // Leer telegram_id de la URL (parámetro pasado por el bot)
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlTelegramId = urlParams.get('telegram_id');
+        
+        console.log('[AUTH] URL params:', Array.from(urlParams.entries()));
+        console.log('[AUTH] telegram_id from URL:', urlTelegramId);
+
         if (window.Telegram && window.Telegram.WebApp) {
             window.Telegram.WebApp.ready();
             window.Telegram.WebApp.expand();
             
-            // Extraer telegram_id del initData
-            const initData = new URLSearchParams(window.Telegram.WebApp.initData);
-            const user = initData.get('user');
-            if (user) {
-                const userData = JSON.parse(user);
-                telegramId = userData.id;
-                userName = userData.first_name || userData.username || 'Usuario';
-                console.log('[TELEGRAM] User ID:', telegramId, 'Name:', userName);
+            console.log('[TELEGRAM] 📲 WebApp disponible');
+            
+            // Prioridad 1: Usar telegram_id del parámetro de URL (bot en polling mode)
+            if (urlTelegramId) {
+                telegramId = String(urlTelegramId);
+                console.log('[AUTH] ✓ telegram_id capturado de URL:', telegramId);
+                
+                // Intentar obtener el nombre del usuario de initDataUnsafe
+                const user = window.Telegram.WebApp.initDataUnsafe?.user;
+                if (user) {
+                    userName = user.first_name || user.username || 'Usuario';
+                    console.log('[AUTH] ✓ Nombre obtenido de initDataUnsafe:', userName);
+                } else {
+                    userName = 'Usuario';
+                    console.log('[AUTH] nombre no disponible en initDataUnsafe, usando valor por defecto');
+                }
+                
+                metaText.textContent = 'Perfil activo: ' + userName;
+            } else {
+                // Fallback: intentar obtener usuario de initDataUnsafe.user (webhook mode)
+                console.log('[AUTH] telegram_id no en URL, intentando initDataUnsafe...');
+                let user = window.Telegram.WebApp.initDataUnsafe?.user;
+                
+                if (user && user.id) {
+                    telegramId = String(user.id);
+                    userName = user.first_name || user.username || 'Usuario';
+                    console.log('[AUTH] ✓ Usuario desde initDataUnsafe:', telegramId, userName);
+                    metaText.textContent = 'Perfil activo: ' + userName;
+                } else {
+                    console.warn('[AUTH] ❌ No se pudo obtener telegram_id');
+                    metaText.textContent = '⚠️ Error: No se pudo cargar tu perfil de Telegram. Intenta cerrar y reabrir desde Telegram.';
+                    statusPill.textContent = 'Error de autenticación';
+                }
             }
+        } else {
+            console.warn('[WEBAPP] ⚠️ window.Telegram no está disponible - esta página NO está en un WebApp de Telegram');
+            metaText.textContent = '⚠️ Abre el escáner desde el bot de Telegram (@nutriarbot)';
+            statusPill.textContent = 'No está en Telegram';
         }
 
         async function initCamera() {
@@ -368,7 +413,7 @@
             if (level === 'ok') {
                 cardBadge.textContent = 'APTO';
                 statusPill.textContent = 'Producto seguro';
-                metaText.textContent = 'El análisis coincide con tu perfil activo: Carlos Diabético';
+                metaText.textContent = 'El análisis coincide con tu perfil activo: ' + (userName || 'Usuario');
             } else if (level === 'warning') {
                 cardBadge.textContent = 'RIESGO';
                 statusPill.textContent = 'Atención requerida';
@@ -406,6 +451,14 @@
                 return;
             }
 
+            // Validar que el usuario esté identificado ANTES de intentar escanear
+            if (!telegramId) {
+                showResult('warning', 'Error de autenticación', '⚠️ Debes estar dentro del bot de Telegram para usar el escáner. Cierra y reabre desde Telegram.');
+                statusPill.textContent = 'No autenticado';
+                console.error('[CLIENT] ❌ Intento de escanear sin telegram_id');
+                return;
+            }
+
             isScanning = true;
             setLoading(true);
             card.classList.remove('visible');
@@ -417,12 +470,8 @@
                 formData.append('image', blob, 'scan.jpg');
                 
                 // Enviar telegram_id para identificar al usuario
-                if (telegramId) {
-                    formData.append('telegram_id', telegramId);
-                    console.log('[CLIENT] Enviando imagen con telegram_id:', telegramId);
-                } else {
-                    console.warn('[CLIENT] telegram_id no disponible, continuando sin identificación');
-                }
+                formData.append('telegram_id', telegramId);
+                console.log('[CLIENT] ✓ Enviando imagen con telegram_id:', telegramId);
 
                 const response = await fetch(apiBaseUrl + '/api/analyze', {
                     method: 'POST',

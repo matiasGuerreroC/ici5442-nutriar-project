@@ -237,8 +237,30 @@ async def servir_index():
 
 @app.get("/api/health")
 async def healthcheck():
-    return {"status": "ok", "message": "Backend NutriAR activo"}
+    return {
+        "status": "ok", 
+        "message": "Backend NutriAR activo",
+        "webapp_url": WEBAPP_URL,
+        "telegram_configurado": bool(TELEGRAM_TOKEN)
+    }
 
+
+@app.get("/api/setup-webhook")
+async def setup_webhook():
+    """Configura el webhook de Telegram"""
+    try:
+        webhook_url = f"{WEBAPP_URL.rstrip('/')}/api/webhook"
+        bot.remove_webhook()
+        import time
+        time.sleep(1)
+        bot.set_webhook(url=webhook_url)
+        print(f"[WEBHOOK] ✓ Webhook configurado en: {webhook_url}")
+        return {
+            "status": "success",
+            "webhook_url": webhook_url,
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
 
 @app.get("/api/restricciones")
 async def obtener_restricciones():
@@ -397,7 +419,8 @@ def enviar_bienvenida(message):
         db.close()
     
     markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
-    web_app = types.WebAppInfo(WEBAPP_URL)
+    webapp_url_with_id = f"{WEBAPP_URL.rstrip('/')}?telegram_id={message.from_user.id}"
+    web_app = types.WebAppInfo(webapp_url_with_id)
     btn_scanner = types.KeyboardButton(text="🚀 Abrir Escáner NutriAR", web_app=web_app)
     btn_perfil = types.KeyboardButton(text="👤 Configurar Perfil")
     
@@ -458,7 +481,8 @@ def boton_scanner(message):
         )
     else:
         markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
-        web_app = types.WebAppInfo(WEBAPP_URL)
+        webapp_url_with_id = f"{WEBAPP_URL.rstrip('/')}?telegram_id={message.from_user.id}"
+        web_app = types.WebAppInfo(webapp_url_with_id)
         btn = types.KeyboardButton(text="🚀 Abrir Escáner NutriAR", web_app=web_app)
         markup.add(btn)
         bot.send_message(
@@ -610,20 +634,31 @@ def agregar_restriccion_callback(call):
     db = SessionLocal()
     try:
         restriccion_id = int(call.data.split("_")[-1])
-        usuario = obtener_o_crear_usuario(
+        
+        # Obtenemos al usuario
+        usuario_desconectado = obtener_o_crear_usuario(
             telegram_id=call.from_user.id,
             nombre=call.from_user.first_name or "Usuario"
         )
+        
+        # 1. SOLUCIÓN DB: Volvemos a "conectar" al usuario a la sesión actual de base de datos
+        usuario = db.merge(usuario_desconectado)
         
         restriccion = db.query(Restriccion).filter(Restriccion.id == restriccion_id).first()
         if restriccion and restriccion not in usuario.restricciones:
             usuario.restricciones.append(restriccion)
             db.commit()
             bot.answer_callback_query(call.id, f"✓ {restriccion.nombre} añadida", show_alert=False)
-            # Recargar el mensaje para mostrar la restricción agregada
-            bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=call.message.reply_markup)
+            
+            # 2. SOLUCIÓN TELEGRAM: Ignoramos el error si los botones no cambian visualmente
+            try:
+                bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=call.message.reply_markup)
+            except telebot.apihelper.ApiTelegramException as e:
+                if "message is not modified" not in str(e):
+                    raise e # Si es otro error distinto, lo lanzamos
         else:
             bot.answer_callback_query(call.id, "Esta restricción ya está en tu perfil", show_alert=False)
+            
     except Exception as e:
         print(f"[ERROR] {e}")
         bot.answer_callback_query(call.id, "Error al agregar restricción", show_alert=True)
@@ -635,12 +670,16 @@ def agregar_restriccion_callback(call):
 def perfil_listo(call):
     """Finaliza la configuración del perfil"""
     bot.answer_callback_query(call.id)
-    bot.edit_message_text(
-        "✅ ¡Perfil configurado! Ya puedes usar el escáner con tus restricciones personalizadas.\n\n"
-        "🚀 Usa /start para abrir el escáner",
-        chat_id=call.message.chat.id,
-        message_id=call.message.message_id
-    )
+    try:
+        bot.edit_message_text(
+            "✅ ¡Perfil configurado! Ya puedes usar el escáner con tus restricciones personalizadas.\n\n"
+            "🚀 Usa /start para abrir el escáner",
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id
+        )
+    except telebot.apihelper.ApiTelegramException as e:
+        if "message is not modified" not in str(e):
+            raise e # Si es otro error, que lo muestre
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "header")
@@ -661,18 +700,31 @@ def puerto_esta_libre(port):
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         return s.connect_ex(("127.0.0.1", port)) != 0
 
-
 if __name__ == "__main__":
     if not puerto_esta_libre(PORT):
         raise RuntimeError(
-            f"El puerto {PORT} está ocupado. Cierra 'python -m http.server {PORT}' u otro proceso, "
-            f"y vuelve a ejecutar 'python bot.py'."
+            f"El puerto {PORT} está ocupado."
         )
 
     print("📋 Inicializando restricciones en BD...")
     inicializar_restricciones()
     
+    print(f"🌐 WEBAPP_URL configurada: {WEBAPP_URL}")
     print("🤖 Bot de NutriAR iniciado. Esperando mensajes...")
+    
+    # Eliminar webhook si existe
+    try:
+        bot.remove_webhook()
+        import time
+        time.sleep(1)
+        print("✓ Webhook eliminado")
+    except Exception as e:
+        print(f"⚠️ No había webhook activo: {e}")
+    
+    # Iniciar servidor FastAPI en background
     thread_web = threading.Thread(target=iniciar_servidor_web, daemon=True)
     thread_web.start()
+    
+    # Usar polling en lugar de webhook
+    print("⏳ Escuchando mensajes con polling...")
     bot.infinity_polling(skip_pending=True)
