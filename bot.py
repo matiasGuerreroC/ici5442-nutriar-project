@@ -491,10 +491,10 @@ def enviar_bienvenida(message):
         db.close()
     
     markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
-    webapp_url_with_id = f"{WEBAPP_URL.rstrip('/')}?telegram_id={message.from_user.id}"
-    web_app = types.WebAppInfo(webapp_url_with_id)
-    btn_scanner = types.KeyboardButton(text="🚀 Abrir Escáner NutriAR", web_app=web_app)
-    btn_historial = types.KeyboardButton(text="📊 Ver Historial")
+    webapp_url_scanner = f"{WEBAPP_URL.rstrip('/')}?telegram_id={message.from_user.id}"
+    webapp_url_historial = f"{WEBAPP_URL.rstrip('/')}/historial?telegram_id={message.from_user.id}"
+    btn_scanner = types.KeyboardButton(text="🚀 Abrir Escáner NutriAR", web_app=types.WebAppInfo(webapp_url_scanner))
+    btn_historial = types.KeyboardButton(text="📊 Ver Historial", web_app=types.WebAppInfo(webapp_url_historial))
     btn_perfil = types.KeyboardButton(text="👤 Configurar Perfil")
     
     markup.add(btn_scanner)
@@ -526,7 +526,7 @@ def enviar_bienvenida(message):
     )
 
 
-@bot.message_handler(func=lambda message: message.text == "� Ver Historial")
+@bot.message_handler(func=lambda message: message.text in ["📊 Ver Historial", "Ver Historial"])
 def boton_historial(message):
     """Handler para el botón de historial"""
     usuario = obtener_o_crear_usuario(
@@ -562,7 +562,7 @@ def boton_historial(message):
         )
 
 
-@bot.message_handler(func=lambda message: message.text == "�👤 Configurar Perfil")
+@bot.message_handler(func=lambda message: message.text == "👤 Configurar Perfil")
 def boton_perfil(message):
     """Handler para el botón de configurar perfil"""
     configurar_perfil(message)
@@ -671,7 +671,7 @@ def ver_historial(message):
         
         if not historial:
             markup = types.InlineKeyboardMarkup()
-            webapp_url_with_id = f"{WEBAPP_URL.rstrip('/')}/historial?telegram_id={message.from_user.id}"
+            webapp_url_with_id = f"{WEBAPP_URL.rstrip('/')}/?telegram_id={message.from_user.id}&tab=historial"
             web_app = types.WebAppInfo(webapp_url_with_id)
             markup.add(types.InlineKeyboardButton("📊 Ver Historial Completo", web_app=web_app))
             
