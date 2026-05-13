@@ -41,8 +41,15 @@
     animation: scan 2.5s ease-in-out infinite;
 }
 
+/* PANEELES DE CRISTAL */
+.glass-panel {
+    background: rgba(47, 49, 49, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
 /* =========================================
-   3. ESTADOS DINÁMICOS DE LA UI (Inyectados por app.js)
+   3. ESTADOS DINÁMICOS DE LA UI 
    ========================================= */
 
 /* Tarjeta de resultado (Oculta abajo de la pantalla por defecto) */
@@ -80,6 +87,11 @@
     opacity: 1;
     transform: translate(-50%, 0) scale(1);
 }
+
+/* DESTELLOS DE ALERTA DINÁMICOS (Resplandor en los bordes de la tarjeta) */
+.alert-glow-danger { box-shadow: 0 0 40px rgba(186, 26, 26, 0.5); }
+.alert-glow-success { box-shadow: 0 0 40px rgba(0, 110, 40, 0.5); }
+.alert-glow-info { box-shadow: 0 0 40px rgba(0, 95, 158, 0.5); }
 
 /* =========================================
    4. COLORES DINÁMICOS PARA EL BADGE (Inyectados por app.js)
