@@ -10,7 +10,7 @@ from io import BytesIO
 
 import telebot
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Depends
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Depends, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -395,30 +395,43 @@ async def obtener_usuario(telegram_id: str):
 
 
 @app.post("/api/usuario/{telegram_id}/restricciones")
-async def agregar_restriccion_usuario(telegram_id: str, restriccion_id: int):
-    """Agrega una restricción al usuario"""
+async def agregar_restriccion_usuario(telegram_id: str, payload: dict = Body(...)):
+    """Agrega o quita una restricción al usuario"""
+    restriccion_id = payload.get("restriccion_id")
+    if restriccion_id is None:
+        return {"status": "error", "error": "Campo restriccion_id es requerido", "codigo": 400}
+
     db = SessionLocal()
     try:
-        usuario = obtener_o_crear_usuario(telegram_id=telegram_id)
+        usuario = db.query(Usuario).filter(Usuario.telegram_id == str(telegram_id)).first()
+        if not usuario:
+            usuario = Usuario(telegram_id=str(telegram_id), nombre="Usuario")
+            db.add(usuario)
+            db.commit()
+            db.refresh(usuario)
+
         restriccion = db.query(Restriccion).filter(Restriccion.id == restriccion_id).first()
-        
         if not restriccion:
             return {"status": "error", "error": "Restricción no encontrada", "codigo": 404}
-        
-        if restriccion not in usuario.restricciones:
-            usuario.restricciones.append(restriccion)
+
+        if restriccion in usuario.restricciones:
+            usuario.restricciones.remove(restriccion)
             db.commit()
             return {
                 "status": "success",
-                "message": f"Restricción '{restriccion.nombre}' agregada",
-                "restriccion": {"id": restriccion.id, "nombre": restriccion.nombre}
+                "message": f"Restricción '{restriccion.nombre}' eliminada",
+                "restriccion": {"id": restriccion.id, "nombre": restriccion.nombre},
+                "action": "removed"
             }
-        else:
-            return {
-                "status": "error",
-                "error": "Esta restricción ya está en tu perfil",
-                "codigo": 409
-            }
+
+        usuario.restricciones.append(restriccion)
+        db.commit()
+        return {
+            "status": "success",
+            "message": f"Restricción '{restriccion.nombre}' agregada",
+            "restriccion": {"id": restriccion.id, "nombre": restriccion.nombre},
+            "action": "added"
+        }
     except Exception as e:
         return {"status": "error", "error": str(e), "codigo": 500}
     finally:

@@ -55,6 +55,7 @@
                     <div>
                         <p id="profile-name" class="font-bold text-lg">Usuario NutriAR</p>
                         <p id="profile-handle" class="text-sm text-on-surface-variant">@usuario_nutriar</p>
+                        <p id="profile-status" class="text-xs text-on-surface-variant mt-1">Cargando tu perfil...</p>
                     </div>
                 </div>
             </div>
@@ -208,7 +209,12 @@
             document.getElementById('profile-handle').textContent = `@${usuario.telegram_id}`;
             document.getElementById('profile-subtitle').textContent = 'Edita tus condiciones y preferencias';
 
-            const selected = new Set(usuario.restricciones.map(r => r.nombre));
+            const activeRestrictions = usuario.restricciones.map(r => r.nombre);
+            document.getElementById('profile-status').textContent = activeRestrictions.length > 0
+                ? `Configurado: ${activeRestrictions.join(', ')}`
+                : 'Aún no tienes restricciones activas';
+
+            const selected = new Set(activeRestrictions);
 
             document.getElementById('medical-section').innerHTML = medicalOptions.map(option => {
                 const active = selected.has(option.label);
