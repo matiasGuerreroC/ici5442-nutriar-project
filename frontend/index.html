@@ -91,17 +91,20 @@
             </div>
             
             <!-- Bottom Shade & Controls -->
-            <div class="flex-grow scanner-overlay w-full relative flex flex-col items-center">
+            <div class="flex-grow scanner-overlay w-full relative flex flex-col justify-center items-center">
+                
                 <!-- Interaction Controls -->
-                <div class="absolute bottom-10 left-0 right-0 flex justify-center items-center gap-12 px-8 pointer-events-auto">
+                <div class="absolute bottom-8 left-0 right-0 flex justify-between items-center px-10 pointer-events-auto">
                     
-                    <!-- LINTERNA: Añadidos IDs y onclick para conectar con app.js -->
-                    <button id="flashlight-btn" onclick="toggleFlashlight()" class="w-12 h-12 rounded-full bg-black/40 border border-white/20 backdrop-blur-md flex items-center justify-center text-white active:scale-90 transition-all">
-                        <span id="flash-icon" class="material-symbols-outlined text-[24px]">flashlight_on</span>
-                    </button>
+                    <!-- LADO IZQUIERDO: LINTERNA -->
+                    <div class="w-16 flex justify-start">
+                        <button id="flashlight-btn" onclick="toggleFlashlight()" class="w-12 h-12 rounded-full bg-black/40 border border-white/20 backdrop-blur-md flex items-center justify-center text-white active:scale-90 transition-all">
+                            <span id="flash-icon" class="material-symbols-outlined text-[24px]">flashlight_on</span>
+                        </button>
+                    </div>
                     
-                    <!-- BOTÓN CAPTURAR -->
-                    <div class="relative group">
+                    <!-- CENTRO PERFECTO: BOTÓN CAPTURAR -->
+                    <div class="relative group flex justify-center">
                         <div class="absolute -inset-2 border-2 border-white/30 rounded-full"></div>
                         <button id="scan-button" onclick="startScan()" class="relative w-20 h-20 rounded-full border-4 border-white bg-white/20 backdrop-blur-sm flex items-center justify-center p-1.5 active:scale-95 transition-all shadow-2xl">
                             <div class="w-full h-full rounded-full bg-white flex items-center justify-center">
@@ -109,6 +112,10 @@
                             </div>
                         </button>
                     </div>
+
+                    <!-- LADO DERECHO: FANTASMA (Para equilibrar y centrar la cámara) -->
+                    <div class="w-16"></div>
+                    
                 </div>
             </div>
         </div>

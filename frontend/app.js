@@ -158,53 +158,75 @@ function showResult(level, title, message, ingredients = []) {
     card.classList.add('visible');
     cardTitle.textContent = title;
 
-    // 1. Limpiar estilos anteriores
+    // 1. Limpiar los brillos de la tarjeta principal
     cardGlow.classList.remove('alert-glow-danger', 'alert-glow-success', 'alert-glow-info');
-    cardBadge.classList.remove('bg-tertiary', 'bg-secondary', 'bg-primary');
-    msgIcon.classList.remove('text-tertiary-fixed-dim', 'text-secondary-fixed', 'text-primary-fixed');
+    
+    // 2. Limpiar las clases base de la etiqueta (Badge) y la caja de mensaje
+    cardBadge.className = 'px-3 py-1 rounded-full flex items-center gap-1.5'; 
+    msgContainer.className = 'flex items-start gap-3 p-3 rounded-xl border';
+    
     allergensContainer.innerHTML = ''; 
 
-    // 2. Aplicar estilos según el resultado de Groq
+    // 3. Aplicar colores vibrantes según el resultado
     if (level === 'ok') {
+        // --- MODO APTO (VERDE) ---
         cardGlow.classList.add('alert-glow-success');
-        cardBadge.classList.add('bg-secondary');
+        
+        // Etiqueta Verde Fuerte
+        cardBadge.classList.add('bg-green-600', 'text-white');
         badgeIcon.textContent = 'verified_user';
         badgeText.textContent = 'SEGURO';
         
+        // Caja de Explicación Verde Translúcida
+        msgContainer.classList.add('bg-green-500/20', 'border-green-500/30');
         msgIcon.textContent = 'check_circle';
-        msgIcon.classList.add('text-secondary-fixed');
-        riskText.innerHTML = `<span class="text-secondary-fixed font-bold">Aprobado:</span> ${message}`;
+        msgIcon.className = 'material-symbols-outlined text-green-400';
+        
+        riskText.innerHTML = `<span class="text-green-400 font-bold">Aprobado:</span> <span class="text-white/90">${message}</span>`;
         statusPill.textContent = 'Producto seguro';
 
     } else if (level === 'warning') {
+        // --- MODO PELIGRO (ROJO) ---
         cardGlow.classList.add('alert-glow-danger');
-        cardBadge.classList.add('bg-tertiary');
+        
+        // Etiqueta Roja Fuerte
+        cardBadge.classList.add('bg-red-600', 'text-white');
         badgeIcon.textContent = 'warning';
         badgeText.textContent = 'RIESGO';
         
+        // Caja de Explicación Roja Translúcida
+        msgContainer.classList.add('bg-red-500/20', 'border-red-500/30');
         msgIcon.textContent = 'error';
-        msgIcon.classList.add('text-tertiary-fixed-dim');
-        riskText.innerHTML = message;
+        msgIcon.className = 'material-symbols-outlined text-red-400';
+        
+        // El texto "Peligro" ya lo envía el bot, así que lo mostramos tal cual
+        riskText.innerHTML = `<span class="text-white/90">${message}</span>`;
         statusPill.textContent = 'Atención requerida';
 
-        // Pinta los "chips" rojos con los ingredientes peligrosos
+        // Dibujar los cuadritos rojos de ingredientes
         if (ingredients && ingredients.length > 0) {
             ingredients.forEach(ing => {
                 const chip = document.createElement('div');
-                chip.className = 'px-3 py-1 bg-[#ba1a1a]/20 border border-[#ba1a1a]/30 rounded-lg';
-                chip.innerHTML = `<p class="text-[11px] font-bold text-white/90">${ing}</p>`;
+                chip.className = 'px-3 py-1 bg-red-600/40 border border-red-500/50 rounded-lg shadow-sm';
+                chip.innerHTML = `<p class="text-[11px] font-bold text-white">${ing}</p>`;
                 allergensContainer.appendChild(chip);
             });
         }
 
     } else {
+        // --- MODO ERROR (AZUL) ---
         cardGlow.classList.add('alert-glow-info');
-        cardBadge.classList.add('bg-primary');
+        
+        cardBadge.classList.add('bg-blue-600', 'text-white');
         badgeIcon.textContent = 'info';
         badgeText.textContent = 'INFO';
+        
+        msgContainer.classList.add('bg-blue-500/20', 'border-blue-500/30');
         msgIcon.textContent = 'info';
-        msgIcon.classList.add('text-primary-fixed');
-        riskText.textContent = message;
+        msgIcon.className = 'material-symbols-outlined text-blue-400';
+        
+        riskText.innerHTML = `<span class="text-white/90">${message}</span>`;
+        statusPill.textContent = 'Falla de análisis';
     }
 }
 
