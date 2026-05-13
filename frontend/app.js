@@ -28,7 +28,10 @@ const cardBadge = document.getElementById('card-badge');
 const badgeIcon = document.getElementById('badge-icon');
 const badgeText = document.getElementById('badge-text');
 const msgIcon = document.getElementById('msg-icon');
+const msgContainer = document.getElementById('msg-container');
 const allergensContainer = document.getElementById('allergens-container');
+const retryButton = document.getElementById('retry-button');
+const rescanButton = document.getElementById('rescan-button');
 
 // Variables de Estado Global
 let cameraStream = null;
@@ -37,6 +40,7 @@ let isTorchOn = false;
 let isScanning = false;
 let telegramId = null;
 let userName = null;
+let lastCapturedBlob = null;  // Guardar última imagen para reintentos
 
 
 // ==========================================
@@ -154,7 +158,7 @@ function restartScan() {
 // ==========================================
 // 4. LÓGICA DE LA TARJETA AR (APTO / NO APTO)
 // ==========================================
-function showResult(level, title, message, ingredients = []) {
+function showResult(level, title, message, ingredients = [], canRetry = false) {
     card.classList.add('visible');
     cardTitle.textContent = title;
 
@@ -165,7 +169,10 @@ function showResult(level, title, message, ingredients = []) {
     cardBadge.className = 'px-3 py-1 rounded-full flex items-center gap-1.5'; 
     msgContainer.className = 'flex items-start gap-3 p-3 rounded-xl border';
     
-    allergensContainer.innerHTML = ''; 
+    allergensContainer.innerHTML = '';
+    
+    // Control de botones
+    retryButton.style.display = canRetry ? 'flex' : 'none';
 
     // 3. Aplicar colores vibrantes según el resultado
     if (level === 'ok') {
@@ -230,6 +237,56 @@ function showResult(level, title, message, ingredients = []) {
     }
 }
 
+async function retryLastAnalysis() {
+    if (!lastCapturedBlob || !telegramId) {
+        alert('Error: No hay imagen para reintentar');
+        return;
+    }
+
+    isScanning = true;
+    card.classList.remove('visible');
+    
+    try {
+        updateLoadingState(true, 'ANALIZANDO INFORMACIÓN...');
+        
+        const formData = new FormData();
+        formData.append('image', lastCapturedBlob, 'scan.jpg');
+        formData.append('telegram_id', telegramId);
+
+        const response = await fetch(apiBaseUrl + '/api/analyze', {
+            method: 'POST',
+            headers: { 
+                'Accept': 'application/json',
+                'ngrok-skip-browser-warning': 'true'
+            },
+            body: formData
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Error ${response.status}: ${errorText.substring(0, 100)}`);
+        }
+
+        const data = await response.json();
+        
+        if (data.status === 'error') {
+            throw new Error(data.error || 'Error del servidor');
+        }
+
+        const display = data.display || {};
+        const level = display.status === 'ok' ? 'ok' : 'warning';
+        const ingredientsArray = data.analysis?.ingredientes_peligrosos || [];
+        showResult(level, display.title, display.message, ingredientsArray, false);
+        
+    } catch (err) {
+        console.error("Error en reintento:", err);
+        showResult('info', 'Error de red', err.message || 'Por favor, intenta de nuevo.', [], true);
+    } finally {
+        updateLoadingState(false);
+        isScanning = false;
+    }
+}
+
 
 // ==========================================
 // 5. MOTOR DE CAPTURA E INFERENCIA (GROQ API)
@@ -268,10 +325,10 @@ async function startScan() {
         updateLoadingState(true, 'CAPTURA DE IMAGEN...');
         statusPill.textContent = 'Procesando...';
         
-        // Apaga la linterna para evitar reflejos de plástico antes de tomar la foto
         if (isTorchOn) toggleFlashlight(); 
 
         const blob = await captureFrame();
+        lastCapturedBlob = blob;  // Guardar para reintentos
         
         const formData = new FormData();
         formData.append('image', blob, 'scan.jpg');
@@ -289,28 +346,55 @@ async function startScan() {
         // Llama al Backend
         const response = await fetch(apiBaseUrl + '/api/analyze', {
             method: 'POST',
-            headers: { 'Accept': 'application/json' },
-            body: formData
+            headers: { 
+                'Accept': 'application/json',
+                'ngrok-skip-browser-warning': 'true' // Vital para Ngrok
+            },
+            body: formData,
+            timeout: 180000  // 3 minutos timeout
         });
 
         clearTimeout(analyzerTimer);
 
+        // VERIFICACIÓN DE ERROR CRÍTICA:
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error("Respuesta fallida del servidor:", errorText);
+            throw new Error(`El servidor respondió con código ${response.status}: ${errorText.substring(0, 50)}`);
+        }
+
         const data = await response.json();
         
-        if (!response.ok || data.status === 'error') throw new Error(data.error);
+        if (data.status === 'error') {
+            throw new Error(data.error || 'Error desconocido en el servidor.');
+        }
 
         const display = data.display || {};
         const level = display.status === 'ok' ? 'ok' : 'warning';
         
-        // Enviar la lista de ingredientes para que se dibujen los cuadritos rojos
+        // Enviar la lista de ingredientes para que se dibujen los cuadritos
         const ingredientsArray = data.analysis?.ingredientes_peligrosos || [];
-        showResult(level, display.title, display.message, ingredientsArray);
+        showResult(level, display.title, display.message, ingredientsArray, false);
         
     } catch (err) {
-        showResult('info', 'Error de red', err.message || 'No se pudo conectar con el servidor.');
+        console.error("ERROR CAPTURADO EN EL CATCH:", err);
+        // Mostrar error con opción de reintentar (permitir reintentar = true)
+        showResult('info', 'Error de conexión', 'Parece que hubo un problema. Intenta nuevamente.', [], true);
         statusPill.textContent = 'Error';
     } finally {
         updateLoadingState(false);
         isScanning = false;
+    }
+}
+
+
+// ==========================================
+// 6. NAVEGACIÓN ENTRE PANTALLAS
+// ==========================================
+function goToHistory() {
+    if (telegramId) {
+        window.location.href = '/historial?telegram_id=' + telegramId;
+    } else {
+        window.location.href = '/historial';
     }
 }

@@ -175,26 +175,45 @@ def analizar_imagen(image_bytes, usuario: Usuario):
     # AQUÍ ESTÁ LA MAGIA: Inyectamos el perfil real de la BD
     system_prompt = obtener_prompt_sistema(usuario)
 
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] 🚀 Enviando a Groq con perfil de BD...")
-    chat_completion = client.chat.completions.create(
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content":[
-                    {"type": "text", "text": "Analiza esta etiqueta y dame el JSON."},
-                    {"type": "image_url", "image_url": {"url": base64_image}},
+    # REINTENTOS CON BACKOFF EXPONENCIAL para evitar timeouts
+    max_intentos = 3
+    espera_base = 2  # segundos
+    
+    for intento in range(max_intentos):
+        try:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] 🚀 Enviando a Groq (intento {intento + 1}/{max_intentos})...")
+            
+            chat_completion = client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {
+                        "role": "user",
+                        "content":[
+                            {"type": "text", "text": "Analiza esta etiqueta y dame el JSON."},
+                            {"type": "image_url", "image_url": {"url": base64_image}},
+                        ],
+                    },
                 ],
-            },
-        ],
-        model=MODELO_VISION,
-        response_format={"type": "json_object"},
-        temperature=0.1,
-    )
+                model=MODELO_VISION,
+                response_format={"type": "json_object"},
+                temperature=0.1,
+                timeout=120.0,  # Timeout de 2 minutos para Groq
+            )
 
-    resultado_json = chat_completion.choices[0].message.content
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ ¡Respuesta recibida de Groq!")
-    return json.loads(resultado_json)
+            resultado_json = chat_completion.choices[0].message.content
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ ¡Respuesta recibida de Groq!")
+            return json.loads(resultado_json)
+            
+        except Exception as e:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ Error en intento {intento + 1}: {str(e)}")
+            
+            if intento < max_intentos - 1:
+                espera = espera_base * (2 ** intento)  # Backoff exponencial: 2s, 4s, 8s
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] ⏳ Esperando {espera}s antes de reintentar...")
+                time.sleep(espera)
+            else:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ Se agotaron los reintentos de Groq")
+                raise Exception(f"No se pudo conectar a Groq después de {max_intentos} intentos: {str(e)}")
 
 
 def construir_respuesta_humana(datos):
@@ -243,7 +262,6 @@ async def servir_index():
 @app.get("/historial")
 async def servir_historial():
     try:
-        # Asegúrate de mover también el historial.html a la carpeta frontend/
         return FileResponse("frontend/historial.html", media_type="text/html")
     except Exception as e:
         print(f"[ERROR] No se pudo cargar historial.html: {e}")

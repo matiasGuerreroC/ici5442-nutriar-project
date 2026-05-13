@@ -131,25 +131,27 @@
 
         <!-- TARJETA AR (GLASS-PANEL MOCKUP) -->
         <div id="ar-card" class="result-card absolute bottom-4 left-4 right-4 z-40">
-            <div id="card-glow" class="glass-panel alert-glow-danger rounded-[2rem] p-6 text-white border border-white/10 flex flex-col gap-4">
+            <div id="card-glow" class="glass-panel rounded-[2rem] p-6 text-white border border-white/10 flex flex-col gap-4">
                 
                 <!-- Status Row -->
                 <div class="flex justify-between items-start">
                     <div class="flex flex-col gap-1">
                         <span class="uppercase tracking-wider text-white/60 font-semibold text-[10px]">Análisis de Nutrientes</span>
-                        <h2 id="card-title" class="text-2xl font-extrabold tracking-tight">PRODUCTO NO APTO</h2>
+                        <h2 id="card-title" class="text-2xl font-extrabold tracking-tight"></h2>
                     </div>
-                    <div id="card-badge" class="bg-tertiary px-3 py-1 rounded-full flex items-center gap-1.5">
-                        <span id="badge-icon" class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">warning</span>
-                        <span id="badge-text" class="text-[10px] font-bold uppercase tracking-widest">RIESGO</span>
+                    <!-- El JS le inyectará bg-red-600 o bg-green-600 aquí -->
+                    <div id="card-badge" class="px-3 py-1 rounded-full flex items-center gap-1.5">
+                        <span id="badge-icon" class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;"></span>
+                        <span id="badge-text" class="text-[10px] font-bold uppercase tracking-widest"></span>
                     </div>
                 </div>
 
                 <!-- Alert Details -->
                 <div class="flex flex-col gap-3">
-                    <div id="msg-container" class="flex items-start gap-3 bg-white/5 p-3 rounded-xl">
-                        <span id="msg-icon" class="material-symbols-outlined text-tertiary-fixed-dim">error</span>
-                        <p id="risk-text" class="text-sm font-medium leading-relaxed text-white/90"></p>
+                    <!-- El JS inyectará bg-red-500/20 o bg-green-500/20 aquí -->
+                    <div id="msg-container" class="flex items-start gap-3 p-3 rounded-xl border">
+                        <span id="msg-icon" class="material-symbols-outlined"></span>
+                        <p id="risk-text" class="text-sm font-medium leading-relaxed"></p>
                     </div>
 
                     <!-- Contenedor Dinámico para Ingredientes (Chips rojos) -->
@@ -158,11 +160,17 @@
                     </div>
                 </div>
 
-                <!-- Main Action -->
-                <button onclick="restartScan()" class="w-full bg-secondary py-4 rounded-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-lg border border-white/10">
-                    <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">filter_center_focus</span>
-                    <span class="text-sm font-bold uppercase tracking-widest">RE-ESCANEAR</span>
-                </button>
+                <!-- Main Action - Contenedor Dinámico de Botones -->
+                <div id="action-buttons-container" class="flex gap-2">
+                    <button id="retry-button" onclick="retryLastAnalysis()" class="flex-1 bg-blue-600/80 hover:bg-blue-700 py-4 rounded-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg border border-blue-500/50" style="display: none;">
+                        <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">refresh</span>
+                        <span class="text-sm font-bold uppercase tracking-widest">REINTENTAR</span>
+                    </button>
+                    <button id="rescan-button" onclick="restartScan()" class="flex-1 bg-white/20 hover:bg-white/30 py-4 rounded-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg border border-white/20">
+                        <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">filter_center_focus</span>
+                        <span class="text-sm font-bold uppercase tracking-widest">RE-ESCANEAR</span>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -171,15 +179,20 @@
     <!-- BottomNavBar -->
     <nav class="w-full z-50 bg-[#f9f9f9] dark:bg-[#1a1c1c] border-t border-outline-variant/20 shadow-[0_-4px_24px_rgba(0,0,0,0.05)]">
         <div class="flex justify-around items-center h-16 px-4 pb-safe w-full">
+            <!-- Botón Scanner (Activo) -->
             <button class="flex flex-col items-center justify-center text-primary font-bold px-4 py-1">
                 <span class="material-symbols-outlined text-[26px]" style="font-variation-settings: 'FILL' 1;">view_in_ar</span>
                 <span class="text-[10px] font-bold tracking-wider uppercase mt-0.5">Scanner</span>
             </button>
-            <button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors px-4 py-1">
+            
+            <!-- Botón Historial (Llama a la función goToHistory) -->
+            <button onclick="goToHistory()" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors px-4 py-1 active:scale-95">
                 <span class="material-symbols-outlined text-[26px]">history</span>
                 <span class="text-[10px] font-bold tracking-wider uppercase mt-0.5">Historial</span>
             </button>
-            <button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors px-4 py-1">
+
+            <!-- Botón Perfil -->
+            <button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors px-4 py-1 active:scale-95">
                 <span class="material-symbols-outlined text-[26px]">person</span>
                 <span class="text-[10px] font-bold tracking-wider uppercase mt-0.5">Perfil</span>
             </button>
