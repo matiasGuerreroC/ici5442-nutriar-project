@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from groq import Groq
 from PIL import Image
 from telebot import types
@@ -48,6 +49,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
 # --- PERFIL DE USUARIO ESTÁTICO (Para la PoC) ---
 # perfil_usuario = {
@@ -126,7 +128,7 @@ def obtener_o_crear_usuario(telegram_id: str, nombre: str = None):
         db.close()
 
 def obtener_prompt_sistema(usuario: Usuario):
-    """Genera el System Prompt dinámico leyendo la BD de Neon"""
+    """Genera el System Prompt dinámico leyendo la BD de Neon y aplicando Chain of Thought (CoT)"""
     
     if usuario and usuario.restricciones:
         # Extraer los nombres de las restricciones reales de la BD
@@ -136,16 +138,19 @@ def obtener_prompt_sistema(usuario: Usuario):
         contexto_medico = "El usuario no tiene restricciones médicas registradas. Realiza un análisis nutricional general."
 
     return f"""
-    Eres un asistente experto en salud y lectura de etiquetas nutricionales.
+    Eres un asistente médico experto en salud y lectura de etiquetas nutricionales.
     {contexto_medico}
     
-    Analiza los ingredientes y la tabla nutricional de la imagen adjunta.
-    Cruza la información de la imagen con las condiciones del usuario para determinar si es apto.
+    INSTRUCCIONES CRÍTICAS:
+    1. Lee cuidadosamente TODOS los ingredientes y la tabla nutricional de la imagen adjunta.
+    2. Realiza un razonamiento paso a paso (Chain of Thought) cruzando cada ingrediente con las restricciones del usuario. Piensa en posibles nombres técnicos o contaminación cruzada.
+    3. Una vez hecho el análisis, determina si el producto es apto.
     
     DEBES responder ÚNICAMENTE en formato JSON con la siguiente estructura exacta:
     {{
+        "analisis_paso_a_paso": "Escribe aquí tu razonamiento detallado evaluando los ingredientes frente a las restricciones ANTES de dar el veredicto.",
         "es_apto": booleano,
-        "ingredientes_peligrosos":["lista", "de", "ingredientes", "que", "hacen", "daño"],
+        "ingredientes_peligrosos": ["lista", "de", "ingredientes", "que", "hacen", "daño"],
         "razon": "Explicación breve de por qué es o no es apto"
     }}
     """
@@ -229,10 +234,20 @@ def formatear_respuesta_telegram(datos):
 @app.get("/")
 async def servir_index():
     try:
-        return FileResponse("index.html", media_type="text/html")
+        return FileResponse("frontend/index.html", media_type="text/html")
     except Exception as e:
         print(f"[ERROR] No se pudo cargar index.html: {e}")
         raise HTTPException(status_code=500, detail="No se pudo cargar index.html")
+
+
+@app.get("/historial")
+async def servir_historial():
+    try:
+        # Asegúrate de mover también el historial.html a la carpeta frontend/
+        return FileResponse("frontend/historial.html", media_type="text/html")
+    except Exception as e:
+        print(f"[ERROR] No se pudo cargar historial.html: {e}")
+        raise HTTPException(status_code=500, detail="No se pudo cargar historial.html")
 
 
 @app.get("/api/health")
@@ -261,6 +276,45 @@ async def setup_webhook():
         }
     except Exception as e:
         return {"status": "error", "error": str(e)}
+
+@app.get("/api/historial/{telegram_id}")
+async def obtener_historial(telegram_id: str):
+    """Obtiene el historial de análisis del usuario"""
+    db = SessionLocal()
+    try:
+        usuario = db.query(Usuario).filter(Usuario.telegram_id == str(telegram_id)).first()
+        
+        if not usuario:
+            return {"status": "error", "error": "Usuario no encontrado", "codigo": 404}
+        
+        # Obtener historial ordenado por fecha descendente (más reciente primero)
+        historial = db.query(HistorialProducto).filter(
+            HistorialProducto.usuario_id == usuario.id
+        ).order_by(HistorialProducto.fecha_hora_escaneo.desc()).all()
+        
+        historial_json = []
+        for item in historial:
+            historial_json.append({
+                "id": item.id,
+                "desc_breve_producto": item.desc_breve_producto,
+                "es_apto": item.es_apto,
+                "ingredientes_peligrosos": item.ingredientes_peligrosos or [],
+                "razon_alerta": item.razon_alerta,
+                "fecha_hora_escaneo": item.fecha_hora_escaneo.isoformat() if item.fecha_hora_escaneo else None,
+                "respuesta_json_llm": item.respuesta_json_llm
+            })
+        
+        return {
+            "status": "success",
+            "historial": historial_json,
+            "total": len(historial_json)
+        }
+    except Exception as e:
+        print(f"[ERROR] {e}")
+        return {"status": "error", "error": str(e), "codigo": 500}
+    finally:
+        db.close()
+
 
 @app.get("/api/restricciones")
 async def obtener_restricciones():
@@ -422,9 +476,11 @@ def enviar_bienvenida(message):
     webapp_url_with_id = f"{WEBAPP_URL.rstrip('/')}?telegram_id={message.from_user.id}"
     web_app = types.WebAppInfo(webapp_url_with_id)
     btn_scanner = types.KeyboardButton(text="🚀 Abrir Escáner NutriAR", web_app=web_app)
+    btn_historial = types.KeyboardButton(text="📊 Ver Historial")
     btn_perfil = types.KeyboardButton(text="👤 Configurar Perfil")
     
     markup.add(btn_scanner)
+    markup.add(btn_historial)
     markup.add(btn_perfil)
 
     if tiene_restricciones:
@@ -433,6 +489,7 @@ def enviar_bienvenida(message):
             f"✓ Tu perfil está configurado.\n\n"
             f"Puedes:\n"
             f"• Usar el <b>Escáner NutriAR</b> para analizar productos\n"
+            f"• Ver tu <b>Historial</b> de análisis\n"
             f"• Enviarme fotos de etiquetas directamente\n"
             f"• Actualizar tu perfil en cualquier momento"
         )
@@ -451,7 +508,43 @@ def enviar_bienvenida(message):
     )
 
 
-@bot.message_handler(func=lambda message: message.text == "👤 Configurar Perfil")
+@bot.message_handler(func=lambda message: message.text == "� Ver Historial")
+def boton_historial(message):
+    """Handler para el botón de historial"""
+    usuario = obtener_o_crear_usuario(
+        telegram_id=message.from_user.id,
+        nombre=message.from_user.first_name or "Usuario"
+    )
+    
+    db = SessionLocal()
+    try:
+        historial_count = db.query(HistorialProducto).filter(
+            HistorialProducto.usuario_id == usuario.id
+        ).count()
+    finally:
+        db.close()
+    
+    if historial_count == 0:
+        bot.reply_to(
+            message,
+            "📭 Aún no tienes análisis registrados.\n\n"
+            "🚀 Usa el escáner para analizar tus primeros productos."
+        )
+    else:
+        markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+        webapp_url_with_id = f"{WEBAPP_URL.rstrip('/')}/historial?telegram_id={message.from_user.id}"
+        web_app = types.WebAppInfo(webapp_url_with_id)
+        btn = types.KeyboardButton(text="📊 Ver Historial Completo", web_app=web_app)
+        markup.add(btn)
+        bot.send_message(
+            message.chat.id,
+            f"📊 Abriendo tu historial de análisis...\n"
+            f"Total análisis: {historial_count}",
+            reply_markup=markup
+        )
+
+
+@bot.message_handler(func=lambda message: message.text == "�👤 Configurar Perfil")
 def boton_perfil(message):
     """Handler para el botón de configurar perfil"""
     configurar_perfil(message)
@@ -541,6 +634,59 @@ def analizar_etiqueta(message):
     finally:
         if db:
             db.close()
+
+
+@bot.message_handler(commands=["historial"])
+def ver_historial(message):
+    """Muestra el historial de análisis del usuario"""
+    usuario = obtener_o_crear_usuario(
+        telegram_id=message.from_user.id,
+        nombre=message.from_user.first_name or "Usuario"
+    )
+    
+    db = SessionLocal()
+    try:
+        # Obtener últimos 5 análisis
+        historial = db.query(HistorialProducto).filter(
+            HistorialProducto.usuario_id == usuario.id
+        ).order_by(HistorialProducto.fecha_hora_escaneo.desc()).limit(5).all()
+        
+        if not historial:
+            markup = types.InlineKeyboardMarkup()
+            webapp_url_with_id = f"{WEBAPP_URL.rstrip('/')}/historial?telegram_id={message.from_user.id}"
+            web_app = types.WebAppInfo(webapp_url_with_id)
+            markup.add(types.InlineKeyboardButton("📊 Ver Historial Completo", web_app=web_app))
+            
+            bot.reply_to(
+                message,
+                "📭 Aún no tienes análisis registrados.\n\n"
+                "🚀 Usa el escáner para analizar tus primeros productos.",
+                reply_markup=markup
+            )
+        else:
+            texto = "📊 <b>Tus últimos análisis:</b>\n\n"
+            
+            for idx, item in enumerate(historial, 1):
+                fecha = item.fecha_hora_escaneo.strftime("%d/%m %H:%M") if item.fecha_hora_escaneo else "N/A"
+                estado = "✅" if item.es_apto else "🛑"
+                texto += f"{idx}. {estado} {fecha}\n"
+                
+                if not item.es_apto and item.ingredientes_peligrosos:
+                    ingredientes = ", ".join(item.ingredientes_peligrosos[:2])
+                    if len(item.ingredientes_peligrosos) > 2:
+                        ingredientes += f" +{len(item.ingredientes_peligrosos) - 2}"
+                    texto += f"   ⚠️ {escape(ingredientes)}\n"
+                texto += "\n"
+            
+            # Botón para ver el historial completo
+            markup = types.InlineKeyboardMarkup()
+            webapp_url_with_id = f"{WEBAPP_URL.rstrip('/')}/historial?telegram_id={message.from_user.id}"
+            web_app = types.WebAppInfo(webapp_url_with_id)
+            markup.add(types.InlineKeyboardButton("📊 Ver Historial Completo", web_app=web_app))
+            
+            bot.reply_to(message, texto, reply_markup=markup, parse_mode="HTML")
+    finally:
+        db.close()
 
 
 @bot.message_handler(commands=["perfil"])
