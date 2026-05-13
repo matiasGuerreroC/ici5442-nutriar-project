@@ -398,3 +398,11 @@ function goToHistory() {
         window.location.href = '/historial';
     }
 }
+
+function goToPerfil() {
+    if (telegramId) {
+        window.location.href = '/perfil?telegram_id=' + telegramId;
+    } else {
+        window.location.href = '/perfil';
+    }
+}

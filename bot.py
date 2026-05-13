@@ -77,10 +77,12 @@ RESTRICCIONES_PREDEFINIDAS = {
     "alergia_pescado": {"nombre": "Alergia a Pescado", "tipo": "alergia"},
     "alergia_mariscos": {"nombre": "Alergia a Mariscos", "tipo": "alergia"},
     "alergia_frutos_secos": {"nombre": "Alergia a Frutos Secos", "tipo": "alergia"},
+    "alergia_soya": {"nombre": "Alergia a Soya", "tipo": "alergia"},
     "sin_azucar": {"nombre": "Preferencia: Sin Azúcar Añadida", "tipo": "preferencia"},
     "sin_gluten": {"nombre": "Preferencia: Sin Gluten", "tipo": "preferencia"},
     "vegano": {"nombre": "Preferencia: Vegano", "tipo": "preferencia"},
     "vegetariano": {"nombre": "Preferencia: Vegetariano", "tipo": "preferencia"},
+    "ultraprocesados": {"nombre": "Evitar Ultraprocesados", "tipo": "preferencia"},
 }
 
 
@@ -266,6 +268,15 @@ async def servir_historial():
     except Exception as e:
         print(f"[ERROR] No se pudo cargar historial.html: {e}")
         raise HTTPException(status_code=500, detail="No se pudo cargar historial.html")
+
+
+@app.get("/perfil")
+async def servir_perfil():
+    try:
+        return FileResponse("frontend/perfil.html", media_type="text/html")
+    except Exception as e:
+        print(f"[ERROR] No se pudo cargar perfil.html: {e}")
+        raise HTTPException(status_code=500, detail="No se pudo cargar perfil.html")
 
 
 @app.get("/api/health")
@@ -493,9 +504,10 @@ def enviar_bienvenida(message):
     markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
     webapp_url_scanner = f"{WEBAPP_URL.rstrip('/')}?telegram_id={message.from_user.id}"
     webapp_url_historial = f"{WEBAPP_URL.rstrip('/')}/historial?telegram_id={message.from_user.id}"
+    webapp_url_perfil = f"{WEBAPP_URL.rstrip('/')}/perfil?telegram_id={message.from_user.id}"
     btn_scanner = types.KeyboardButton(text="🚀 Abrir Escáner NutriAR", web_app=types.WebAppInfo(webapp_url_scanner))
     btn_historial = types.KeyboardButton(text="📊 Ver Historial", web_app=types.WebAppInfo(webapp_url_historial))
-    btn_perfil = types.KeyboardButton(text="👤 Configurar Perfil")
+    btn_perfil = types.KeyboardButton(text="👤 Configurar Perfil", web_app=types.WebAppInfo(webapp_url_perfil))
     
     markup.add(btn_scanner)
     markup.add(btn_historial)
