@@ -44,8 +44,8 @@
 /* PANEELES DE CRISTAL */
 .glass-panel {
     background: rgba(47, 49, 49, 0.7);
-    backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
 }
 
 /* =========================================

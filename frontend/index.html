@@ -58,9 +58,9 @@
     <!-- Main Content Area: Camera Viewport -->
     <main class="flex-grow relative overflow-hidden bg-black">
         
-        <!-- Video de la cámara real en vivo -->
-        <video id="camera-feed" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover z-0"></video>
-
+        <!-- CORRECCIÓN iOS: Video de la cámara con atributos playsinline obligatorios -->
+        <video id="camera-feed" autoplay playsinline muted style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: cover; z-index: 0;"></video>
+        
         <!-- Scanning Overlay Layout -->
         <div class="absolute inset-0 z-10 flex flex-col pointer-events-none">
             <!-- Top Shade -->
@@ -72,7 +72,6 @@
                 </div>
             </div>
 
-            
             <!-- Reducimos el alto de 55% a 50% para subir el cuadro -->
             <div class="flex flex-row h-[50%]">
                 <div class="w-[8%] scanner-overlay h-full"></div>

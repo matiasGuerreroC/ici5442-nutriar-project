@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
             telegramId = String(urlTelegramId);
             const user = window.Telegram.WebApp.initDataUnsafe?.user;
             userName = user ? (user.first_name || user.username || 'Usuario') : 'Usuario';
-            metaText.textContent = userName; // Mostrado en la tarjeta
+            metaText.textContent = userName; 
         } else {
             let user = window.Telegram.WebApp.initDataUnsafe?.user;
             if (user && user.id) {
@@ -67,45 +67,35 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     }
-    initCamera();
 });
 
-// --- CORRECCIÓN CRÍTICA PARA iOS/TELEGRAM ---
+
+initCamera();
+
 async function initCamera() {
     try {
         statusPill.textContent = 'Iniciando cámara...';
-        
-        // 1. Pedimos la cámara de la forma más básica y compatible
         cameraStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment' }, // Sin constraints raras aquí
+            video: { facingMode: 'environment' },
             audio: false
         });
-        
         video.srcObject = cameraStream;
-        videoTrack = cameraStream.getVideoTracks()[0];
         
-        // 2. Asegurarnos de que el video esté listo antes de permitir escanear
-        video.onloadedmetadata = () => {
-            video.play();
-            statusPill.textContent = 'Scanner Activo';
-        };
+        // Forzamos la reproducción por si iOS la pauso
+        await video.play();
         
-        // 3. Revisar la linterna solo de forma segura (Fallback para iOS)
-        if (videoTrack.getCapabilities) {
-            const capabilities = videoTrack.getCapabilities();
-            if (!capabilities.torch && flashlightBtn) {
-                flashlightBtn.style.display = 'none'; // Ocultar si no hay linterna
-            }
-        } else if (flashlightBtn) {
-            flashlightBtn.style.display = 'none'; // iOS WebView a veces no expone getCapabilities()
+        statusPill.textContent = 'Scanner Activo';
+
+        if (cameraStream.getVideoTracks().length > 0) {
+            videoTrack = cameraStream.getVideoTracks()[0];
         }
-        
+
     } catch (err) {
-        console.error("Error de cámara:", err);
         statusPill.textContent = 'Sin cámara';
-        alert('Por favor permite el acceso a la cámara. En iPhone: Ajustes > Telegram > Cámara.');
+        alert('Para usar el escáner, ve a Ajustes del iPhone > Telegram > y activa la cámara.');
     }
 }
+
 
 
 // ==========================================
@@ -114,7 +104,7 @@ async function initCamera() {
 async function toggleFlashlight() {
     if (!videoTrack) return;
     try {
-        if (!videoTrack.getCapabilities) return; // Seguridad para iOS
+        if (typeof videoTrack.getCapabilities !== 'function') return; 
         
         const capabilities = videoTrack.getCapabilities();
         if (!capabilities.torch) return; 
@@ -148,6 +138,18 @@ function updateLoadingState(active, message = "") {
     }
 }
 
+function restartScan() {
+    card.classList.remove('visible');
+    isScanning = false;
+    scanButton.classList.remove('scanning-active');
+    statusPill.textContent = 'Scanner Activo';
+    
+    // Volvemos a mostrar el mensaje "Enfoca la etiqueta..."
+    if (instructionTooltip) {
+        instructionTooltip.style.opacity = '1';
+    }
+}
+
 
 // ==========================================
 // 4. LÓGICA DE LA TARJETA AR (APTO / NO APTO)
@@ -160,11 +162,10 @@ function showResult(level, title, message, ingredients = []) {
     cardGlow.classList.remove('alert-glow-danger', 'alert-glow-success', 'alert-glow-info');
     cardBadge.classList.remove('bg-tertiary', 'bg-secondary', 'bg-primary');
     msgIcon.classList.remove('text-tertiary-fixed-dim', 'text-secondary-fixed', 'text-primary-fixed');
-    allergensContainer.innerHTML = ''; // Limpiar los "chips" rojos anteriores
+    allergensContainer.innerHTML = ''; 
 
-    // 2. Aplicar estilos según el resultado
+    // 2. Aplicar estilos según el resultado de Groq
     if (level === 'ok') {
-        // --- MODO APTO (VERDE) ---
         cardGlow.classList.add('alert-glow-success');
         cardBadge.classList.add('bg-secondary');
         badgeIcon.textContent = 'verified_user';
@@ -176,7 +177,6 @@ function showResult(level, title, message, ingredients = []) {
         statusPill.textContent = 'Producto seguro';
 
     } else if (level === 'warning') {
-        // --- MODO PELIGRO (ROJO) ---
         cardGlow.classList.add('alert-glow-danger');
         cardBadge.classList.add('bg-tertiary');
         badgeIcon.textContent = 'warning';
@@ -187,7 +187,7 @@ function showResult(level, title, message, ingredients = []) {
         riskText.innerHTML = message;
         statusPill.textContent = 'Atención requerida';
 
-        // Dibujar los cuadritos rojos de ingredientes
+        // Pinta los "chips" rojos con los ingredientes peligrosos
         if (ingredients && ingredients.length > 0) {
             ingredients.forEach(ing => {
                 const chip = document.createElement('div');
@@ -198,7 +198,6 @@ function showResult(level, title, message, ingredients = []) {
         }
 
     } else {
-        // --- MODO ERROR (AZUL) ---
         cardGlow.classList.add('alert-glow-info');
         cardBadge.classList.add('bg-primary');
         badgeIcon.textContent = 'info';
@@ -209,24 +208,11 @@ function showResult(level, title, message, ingredients = []) {
     }
 }
 
-function restartScan() {
-    card.classList.remove('visible');
-    isScanning = false;
-    scanButton.classList.remove('scanning-active');
-    statusPill.textContent = 'Scanner Activo';
-    
-    // Volvemos a mostrar el mensaje de instrucción
-    if (instructionTooltip) {
-        instructionTooltip.style.opacity = '1';
-    }
-}
-
 
 // ==========================================
 // 5. MOTOR DE CAPTURA E INFERENCIA (GROQ API)
 // ==========================================
 async function captureFrame() {
-    // Añadida protección: Si la cámara carga un poco lento, evitamos que crashee.
     if (!video.videoWidth || !video.videoHeight) throw new Error('Cámara inicializando, intenta otra vez.');
 
     canvas.width = video.videoWidth;
@@ -238,7 +224,7 @@ async function captureFrame() {
         canvas.toBlob((blob) => {
             if (!blob) reject(new Error('Fallo captura'));
             resolve(blob);
-        }, 'image/jpeg', 0.85); // Compresión al 85% para mejorar velocidad
+        }, 'image/jpeg', 0.85); 
     });
 }
 
@@ -252,7 +238,7 @@ async function startScan() {
     isScanning = true;
     card.classList.remove('visible');
 
-    // Ocultar Tooltip superior
+    // Ocultar Tooltip superior de instrucción
     if (instructionTooltip) instructionTooltip.style.opacity = '0';
 
     try {
@@ -260,6 +246,7 @@ async function startScan() {
         updateLoadingState(true, 'CAPTURA DE IMAGEN...');
         statusPill.textContent = 'Procesando...';
         
+        // Apaga la linterna para evitar reflejos de plástico antes de tomar la foto
         if (isTorchOn) toggleFlashlight(); 
 
         const blob = await captureFrame();
@@ -277,6 +264,7 @@ async function startScan() {
             if(isScanning) updateLoadingState(true, 'ANALIZANDO INFORMACIÓN...');
         }, 1200);
 
+        // Llama al Backend
         const response = await fetch(apiBaseUrl + '/api/analyze', {
             method: 'POST',
             headers: { 'Accept': 'application/json' },
@@ -292,12 +280,12 @@ async function startScan() {
         const display = data.display || {};
         const level = display.status === 'ok' ? 'ok' : 'warning';
         
-        // Extraemos la lista de ingredientes del JSON que devolvió el bot.py
+        // Enviar la lista de ingredientes para que se dibujen los cuadritos rojos
         const ingredientsArray = data.analysis?.ingredientes_peligrosos || [];
         showResult(level, display.title, display.message, ingredientsArray);
         
     } catch (err) {
-        showResult('info', 'Error de cámara', err.message || 'No se pudo conectar con el servidor.');
+        showResult('info', 'Error de red', err.message || 'No se pudo conectar con el servidor.');
         statusPill.textContent = 'Error';
     } finally {
         updateLoadingState(false);
