@@ -18,10 +18,11 @@ from fastapi.staticfiles import StaticFiles
 from groq import Groq
 from PIL import Image
 from telebot import types
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 # Importar BD y modelos
-from backend.database import SessionLocal, get_db
+from backend.database import SessionLocal, get_db, engine, Base
 from backend.models import Usuario, HistorialProducto, Restriccion
 
 load_dotenv()
@@ -132,6 +133,18 @@ def inicializar_restricciones():
         db.close()
 
 
+def asegurar_columna_imagen_historial():
+    """Crea la columna imagen_base64 en historial_producto si aún no existe."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE historial_producto ADD COLUMN IF NOT EXISTS imagen_base64 TEXT"
+            ))
+            print("[BD] Columna imagen_base64 asegurada en historial_producto")
+    except Exception as e:
+        print(f"[ADVERTENCIA BD] No se pudo asegurar la columna imagen_base64: {e}")
+
+
 def obtener_o_crear_usuario(telegram_id: str, nombre: str = None):
     """Obtiene un usuario de la BD o lo crea si no existe"""
     db = SessionLocal()
@@ -235,7 +248,9 @@ def analizar_imagen(image_bytes, usuario: Usuario):
 
             resultado_json = chat_completion.choices[0].message.content
             print(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ ¡Respuesta recibida de Groq!")
-            return json.loads(resultado_json)
+            datos = json.loads(resultado_json)
+            datos["imagen_base64"] = base64_image
+            return datos
             
         except Exception as e:
             print(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ Error en intento {intento + 1}: {str(e)}")
@@ -360,6 +375,7 @@ async def obtener_historial(telegram_id: str):
                 "es_apto": item.es_apto,
                 "ingredientes_peligrosos": item.ingredientes_peligrosos or [],
                 "razon_alerta": item.razon_alerta,
+                "imagen_base64": item.imagen_base64,
                 "fecha_hora_escaneo": item.fecha_hora_escaneo.isoformat() if item.fecha_hora_escaneo else None,
                 "respuesta_json_llm": item.respuesta_json_llm
             })
@@ -529,6 +545,7 @@ async def analizar_desde_web(image: UploadFile = File(None), image_base64: str =
             es_apto=datos.get("es_apto", False),
             ingredientes_peligrosos=datos.get("ingredientes_peligrosos",[]),
             razon_alerta=datos.get("razon", ""),
+            imagen_base64=datos.get("imagen_base64"),
             respuesta_json_llm=datos
         )
         db.add(nuevo_historial)
@@ -717,6 +734,7 @@ def analizar_etiqueta(message):
             es_apto=datos.get("es_apto", False),
             ingredientes_peligrosos=datos.get("ingredientes_peligrosos", []),
             razon_alerta=datos.get("razon", ""),
+            imagen_base64=datos.get("imagen_base64"),
             respuesta_json_llm=datos
         )
         db.add(nuevo_historial)
@@ -968,7 +986,9 @@ if __name__ == "__main__":
             f"El puerto {PORT} está ocupado."
         )
 
-    print("📋 Inicializando restricciones en BD...")
+    print("📋 Inicializando esquema y restricciones en BD...")
+    Base.metadata.create_all(bind=engine)
+    asegurar_columna_imagen_historial()
     inicializar_restricciones()
     
     print(f"🌐 WEBAPP_URL configurada: {WEBAPP_URL}")
