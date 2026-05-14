@@ -78,11 +78,18 @@ RESTRICCIONES_PREDEFINIDAS = {
     "alergia_mariscos": {"nombre": "Alergia a Mariscos", "tipo": "alergia"},
     "alergia_frutos_secos": {"nombre": "Alergia a Frutos Secos", "tipo": "alergia"},
     "alergia_soya": {"nombre": "Alergia a Soya", "tipo": "alergia"},
-    "sin_azucar": {"nombre": "Preferencia: Sin Azúcar Añadida", "tipo": "preferencia"},
-    "sin_gluten": {"nombre": "Preferencia: Sin Gluten", "tipo": "preferencia"},
-    "vegano": {"nombre": "Preferencia: Vegano", "tipo": "preferencia"},
-    "vegetariano": {"nombre": "Preferencia: Vegetariano", "tipo": "preferencia"},
+    "sin_azucar": {"nombre": "Sin azúcar añadida", "tipo": "preferencia"},
+    "sin_gluten": {"nombre": "Sin Gluten", "tipo": "preferencia"},
+    "vegano": {"nombre": "Vegano", "tipo": "preferencia"},
+    "vegetariano": {"nombre": "Vegetariano", "tipo": "preferencia"},
     "ultraprocesados": {"nombre": "Evitar Ultraprocesados", "tipo": "preferencia"},
+}
+
+LEGACY_RESTRICCIONES = {
+    "sin_azucar": "Preferencia: Sin Azúcar Añadida",
+    "sin_gluten": "Preferencia: Sin Gluten",
+    "vegano": "Preferencia: Vegano",
+    "vegetariano": "Preferencia: Vegetariano",
 }
 
 
@@ -95,11 +102,58 @@ def inicializar_restricciones():
                 Restriccion.nombre == restriccion["nombre"]
             ).first()
             if not existe:
+                legacy_name = LEGACY_RESTRICCIONES.get(key)
+                if legacy_name:
+                    legacy = db.query(Restriccion).filter(
+                        Restriccion.nombre == legacy_name
+                    ).first()
+                    if legacy:
+                        equivalent = db.query(Restriccion).filter(
+                            Restriccion.nombre == restriccion["nombre"]
+                        ).first()
+                        if equivalent:
+                            for usuario in list(legacy.usuarios):
+                                if equivalent not in usuario.restricciones:
+                                    usuario.restricciones.append(equivalent)
+                                if legacy in usuario.restricciones:
+                                    usuario.restricciones.remove(legacy)
+                            db.delete(legacy)
+                        else:
+                            legacy.nombre = restriccion["nombre"]
+                            legacy.tipo = restriccion["tipo"]
+                            db.add(legacy)
+                        continue
                 nueva = Restriccion(
                     nombre=restriccion["nombre"],
                     tipo=restriccion["tipo"]
                 )
                 db.add(nueva)
+
+        # Eliminar cualquier registro legacy que aún pueda existir en la BD
+        for key, legacy_nombre in LEGACY_RESTRICCIONES.items():
+            legacy = db.query(Restriccion).filter(
+                Restriccion.nombre == legacy_nombre
+            ).first()
+            if not legacy:
+                continue
+
+            target_nombre = RESTRICCIONES_PREDEFINIDAS[key]["nombre"]
+            target = db.query(Restriccion).filter(
+                Restriccion.nombre == target_nombre
+            ).first()
+
+            if target and target.id != legacy.id:
+                for usuario in list(legacy.usuarios):
+                    if target not in usuario.restricciones:
+                        usuario.restricciones.append(target)
+                    if legacy in usuario.restricciones:
+                        usuario.restricciones.remove(legacy)
+                db.delete(legacy)
+            elif not target:
+                legacy.nombre = target_nombre
+                legacy.tipo = "preferencia"
+                db.add(legacy)
+
         db.commit()
     except Exception as e:
         print(f"[ERROR] No se pudieron inicializar restricciones: {e}")
@@ -114,9 +168,14 @@ def obtener_o_crear_usuario(telegram_id: str, nombre: str = None):
     try:
         usuario = db.query(Usuario).filter(Usuario.telegram_id == str(telegram_id)).first()
         if not usuario:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] 👤 Registrando nuevo usuario: {nombre}")
-            usuario = Usuario(telegram_id=str(telegram_id), nombre=nombre or "Usuario")
+            final_name = nombre or f"Telegram {telegram_id}"
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] 👤 Registrando nuevo usuario: {final_name}")
+            usuario = Usuario(telegram_id=str(telegram_id), nombre=final_name)
             db.add(usuario)
+            db.commit()
+            db.refresh(usuario)
+        elif nombre and usuario.nombre != nombre:
+            usuario.nombre = nombre
             db.commit()
             db.refresh(usuario)
         
@@ -371,9 +430,9 @@ async def obtener_restricciones():
 
 
 @app.get("/api/usuario/{telegram_id}")
-async def obtener_usuario(telegram_id: str):
+async def obtener_usuario(telegram_id: str, nombre: str = None):
     """Obtiene el perfil del usuario y sus restricciones"""
-    usuario = obtener_o_crear_usuario(telegram_id=telegram_id)
+    usuario = obtener_o_crear_usuario(telegram_id=telegram_id, nombre=nombre)
     db = SessionLocal()
     try:
         restricciones = [
@@ -405,10 +464,8 @@ async def agregar_restriccion_usuario(telegram_id: str, payload: dict = Body(...
     try:
         usuario = db.query(Usuario).filter(Usuario.telegram_id == str(telegram_id)).first()
         if not usuario:
-            usuario = Usuario(telegram_id=str(telegram_id), nombre="Usuario")
-            db.add(usuario)
-            db.commit()
-            db.refresh(usuario)
+            usuario = obtener_o_crear_usuario(telegram_id=telegram_id)
+            usuario = db.merge(usuario)
 
         restriccion = db.query(Restriccion).filter(Restriccion.id == restriccion_id).first()
         if not restriccion:
@@ -439,7 +496,7 @@ async def agregar_restriccion_usuario(telegram_id: str, payload: dict = Body(...
 
 
 @app.post("/api/registrar_usuario")
-async def registrar_usuario(telegram_id: str, nombre: str = "Usuario"):
+async def registrar_usuario(telegram_id: str = Form(...), nombre: str = Form(None)):
     """Endpoint para registrar/obtener usuario desde el WebApp"""
     usuario = obtener_o_crear_usuario(telegram_id=telegram_id, nombre=nombre)
     return {

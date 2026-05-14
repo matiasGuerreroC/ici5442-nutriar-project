@@ -2,12 +2,14 @@
 <html class="light" lang="es">
 <head>
     <meta charset="utf-8"/>
-    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
     <title>Perfil NutriAR</title>
+    
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    
     <script id="tailwind-config">
       tailwind.config = {
         darkMode: "class",
@@ -30,11 +32,12 @@
       }
     </script>
     <style>
-        body { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
         .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
     </style>
 </head>
 <body class="bg-surface text-on-surface min-h-screen pb-24">
+    <!-- Header -->
     <header class="w-full sticky top-0 bg-white z-50 border-b border-outline-variant/50">
         <div class="flex items-center justify-between px-4 py-4">
             <div class="flex items-center gap-3">
@@ -48,250 +51,272 @@
     </header>
 
     <main class="px-4 pt-4 max-w-md mx-auto">
+        <!-- Tarjeta de Usuario -->
         <section class="mb-6">
             <div class="bg-white rounded-3xl shadow-sm border border-outline-variant/30 p-5">
                 <div class="flex items-center gap-4">
-                    <div class="w-16 h-16 rounded-3xl bg-primary/10 flex items-center justify-center text-primary text-3xl">A</div>
-                    <div>
-                        <p id="profile-name" class="font-bold text-lg">Usuario NutriAR</p>
-                        <p id="profile-handle" class="text-sm text-on-surface-variant">@usuario_nutriar</p>
-                        <p id="profile-status" class="text-xs text-on-surface-variant mt-1">Cargando tu perfil...</p>
+                    <div class="w-16 h-16 rounded-3xl bg-primary/10 flex items-center justify-center text-primary text-3xl font-bold" id="user-initial">U</div>
+                    <div class="flex-1 min-w-0">
+                        <p id="profile-name" class="font-bold text-lg truncate">Usuario NutriAR</p>
+                        <p id="profile-handle" class="text-sm text-on-surface-variant truncate">@usuario</p>
+                        <p id="profile-status" class="text-[11px] text-primary mt-1 font-medium truncate">Cargando...</p>
                     </div>
                 </div>
             </div>
         </section>
 
+        <!-- Condiciones Médicas y Alergias -->
         <section class="mb-6">
             <div class="flex items-center justify-between mb-3">
                 <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.24em] text-on-surface-variant">Mis Restricciones</p>
-                    <p class="text-sm text-on-surface-variant mt-1">Condiciones médicas y alergias activas</p>
+                    <p class="text-xs font-bold uppercase tracking-widest text-on-surface-variant/80">Mis Restricciones</p>
+                    <p class="text-xs text-on-surface-variant mt-0.5">Condiciones médicas y alergias activas</p>
                 </div>
             </div>
-            <div id="medical-section" class="space-y-3"></div>
+            <div id="medical-section" class="bg-white rounded-3xl border border-outline-variant/30 overflow-hidden divide-y divide-outline-variant/20">
+                <!-- Se llena con JS -->
+                <div class="p-8 text-center text-outline-variant text-sm">Cargando opciones...</div>
+            </div>
         </section>
 
+        <!-- Bienestar Preventivo -->
         <section class="mb-6">
             <div class="flex items-center justify-between mb-3">
                 <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.24em] text-on-surface-variant">Bienestar Preventivo</p>
-                    <p class="text-sm text-on-surface-variant mt-1">Preferencias dietéticas electivas</p>
+                    <p class="text-xs font-bold uppercase tracking-widest text-on-surface-variant/80">Bienestar Preventivo</p>
+                    <p class="text-xs text-on-surface-variant mt-0.5">Preferencias dietéticas electivas</p>
                 </div>
             </div>
-            <div id="wellness-section" class="space-y-3"></div>
+            <div id="wellness-section" class="bg-white rounded-3xl border border-outline-variant/30 overflow-hidden divide-y divide-outline-variant/20">
+                <!-- Se llena con JS -->
+                <div class="p-8 text-center text-outline-variant text-sm">Cargando opciones...</div>
+            </div>
         </section>
 
+        <!-- Preferencias UI -->
         <section class="mb-6">
             <div class="flex items-center justify-between mb-3">
                 <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.24em] text-on-surface-variant">Preferencias de Cuenta</p>
-                    <p class="text-sm text-on-surface-variant mt-1">Ajustes generales de tu miniapp</p>
+                    <p class="text-xs font-bold uppercase tracking-widest text-on-surface-variant/80">Preferencias de Cuenta</p>
                 </div>
             </div>
-            <div class="space-y-3">
-                <button class="w-full bg-white rounded-3xl border border-outline-variant/50 p-4 flex items-center justify-between gap-4 text-left transition-all hover:border-primary/40">
+            <div class="bg-white rounded-3xl border border-outline-variant/30 overflow-hidden divide-y divide-outline-variant/20">
+                <button class="w-full p-4 flex items-center justify-between text-left active:bg-surface-container transition-colors">
                     <div class="flex items-center gap-3">
-                        <span class="material-symbols-outlined text-primary text-2xl">notifications</span>
+                        <span class="material-symbols-outlined text-on-surface-variant">notifications</span>
                         <div>
-                            <p class="font-semibold">Notificaciones de Alerta</p>
-                            <p class="text-xs text-on-surface-variant mt-1">Recibe alertas cuando un producto no sea apto</p>
+                            <p class="font-medium text-sm">Notificaciones de Alerta</p>
                         </div>
                     </div>
-                    <span class="inline-flex h-6 w-12 items-center rounded-full bg-surface-container justify-center text-sm text-on-surface-variant">ON</span>
+                    <span class="material-symbols-outlined text-outline-variant text-sm">chevron_right</span>
                 </button>
-                <button class="w-full bg-white rounded-3xl border border-outline-variant/50 p-4 flex items-center justify-between gap-4 text-left transition-all hover:border-primary/40">
+                <button class="w-full p-4 flex items-center justify-between text-left active:bg-surface-container transition-colors">
                     <div class="flex items-center gap-3">
-                        <span class="material-symbols-outlined text-primary text-2xl">language</span>
+                        <span class="material-symbols-outlined text-on-surface-variant">language</span>
                         <div>
-                            <p class="font-semibold">Idioma de Análisis</p>
-                            <p class="text-xs text-on-surface-variant mt-1">Español</p>
+                            <p class="font-medium text-sm">Idioma de Análisis</p>
                         </div>
                     </div>
-                    <span class="material-symbols-outlined text-primary">chevron_right</span>
+                    <span class="text-xs font-bold text-primary mr-1">Español</span>
                 </button>
             </div>
         </section>
-
-        <div class="bg-white rounded-3xl shadow-sm border border-outline-variant/30 p-4 text-sm text-on-surface-variant">
-            <p class="font-semibold mb-2">Cómo funciona</p>
-            <p>Estas restricciones se aplicarán automáticamente durante el escaneo AR para resaltar productos no aptos según tu perfil.</p>
-        </div>
     </main>
 
-    <nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-6 pb-6 pt-3 bg-white shadow-[0_-8px_32px_rgba(26,28,28,0.06)] border-t border-outline-variant/30">
-        <button onclick="goToScanner()" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors active:scale-95">
-            <span class="material-symbols-outlined">barcode_scanner</span>
-            <span class="text-[11px] font-medium uppercase mt-1">Escanear</span>
-        </button>
-        <button onclick="goToHistory()" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors active:scale-95">
-            <span class="material-symbols-outlined">history</span>
-            <span class="text-[11px] font-medium uppercase mt-1">Historial</span>
-        </button>
-        <button class="flex flex-col items-center justify-center text-primary font-bold active:scale-95">
-            <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">settings</span>
-            <span class="text-[11px] font-medium uppercase mt-1">Perfil</span>
-        </button>
+    <!-- BottomNavBar -->
+    <nav class="fixed bottom-0 left-0 w-full z-50 bg-[#f9f9f9] shadow-[0_-4px_24px_rgba(0,0,0,0.05)] border-t border-outline-variant/20">
+        <div class="flex justify-around items-center h-16 px-4 pb-2 w-full">
+            <button onclick="goToScanner()" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors px-4 py-1 active:scale-95">
+                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">barcode_scanner</span>
+                <span class="text-[10px] font-bold tracking-wider uppercase mt-0.5">Escanear</span>
+            </button>
+            <button onclick="goToHistory()" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors px-4 py-1 active:scale-95">
+                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">history</span>
+                <span class="text-[10px] font-bold tracking-wider uppercase mt-0.5">Historial</span>
+            </button>
+            <button onclick="goToPerfil()" class="flex flex-col items-center justify-center text-primary font-bold px-4 py-1 active:scale-95">
+                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">person</span>
+                <span class="text-[10px] font-bold tracking-wider uppercase mt-0.5">Perfil</span>
+            </button>
+        </div>
     </nav>
 
+    <!-- LÓGICA DE PERFIL (Conecta con FastAPI) -->
     <script>
         const apiBaseUrl = window.location.origin;
         const urlParams = new URLSearchParams(window.location.search);
         let telegramId = urlParams.get('telegram_id');
 
-        const medicalOptions = [
-            { key: 'celiaquia', label: 'Celiaquía', icon: 'medical_services' },
-            { key: 'diabetes', label: 'Diabetes Tipo 2', icon: 'monitor_heart' },
-            { key: 'alergia_leche', label: 'Alergia a Lácteos', icon: 'no_food' },
-            { key: 'alergia_soya', label: 'Alergia a Soya', icon: 'health_and_safety' },
-            { key: 'alergia_mani', label: 'Alergia a Maní', icon: 'emoji_food_beverage' },
-            { key: 'alergia_mariscos', label: 'Alergia a Mariscos', icon: 'seafood' },
-            { key: 'alergia_huevo', label: 'Alergia a Huevo', icon: 'egg_alt' },
-            { key: 'alergia_frutos_secos', label: 'Alergia a Frutos Secos', icon: 'local_florist' }
-        ];
-
-        const wellnessOptions = [
-            { key: 'vegano', label: 'Vegano', icon: 'eco' },
-            { key: 'sin_azucar', label: 'Sin azúcar añadida', icon: 'no_food' },
-            { key: 'ultraprocesados', label: 'Evitar ultraprocesados', icon: 'restaurant_menu' }
-        ];
+        // MAPEO EXACTO con los nombres del backend ("RESTRICCIONES_PREDEFINIDAS" en bot.py)
+        const GUI_CONFIG = {
+            "Celiaquía": { icon: "no_meals", section: "medical" },
+            "Diabetes Tipo 2": { icon: "monitor_heart", section: "medical" },
+            "Intolerancia a la Lactosa": { icon: "water_drop", section: "medical" },
+            "Alergia a Maní": { icon: "grain", section: "medical" },
+            "Alergia a Lácteos": { icon: "icecream", section: "medical" },
+            "Alergia a Huevo": { icon: "egg_alt", section: "medical" },
+            "Alergia a Pescado": { icon: "set_meal", section: "medical" },
+            "Alergia a Mariscos": { icon: "phishing", section: "medical" },
+            "Alergia a Frutos Secos": { icon: "forest", section: "medical" },
+            "Alergia a Soya": { icon: "eco", section: "medical" },
+            
+            "Sin azúcar añadida": { icon: "no_drinks", section: "wellness" },
+            "Sin Gluten": { icon: "bakery_dining", section: "wellness" },
+            "Vegano": { icon: "psychiatry", section: "wellness" },
+            "Vegetariano": { icon: "spa", section: "wellness" },
+            "Evitar ultraprocesados": { icon: "restaurant_menu", section: "wellness" }
+        };
 
         document.addEventListener('DOMContentLoaded', async () => {
             if (window.Telegram && window.Telegram.WebApp) {
                 window.Telegram.WebApp.ready();
                 window.Telegram.WebApp.expand();
-                if (!telegramId) {
-                    telegramId = window.Telegram.WebApp.initDataUnsafe?.user?.id || '';
+                const user = window.Telegram.WebApp.initDataUnsafe?.user;
+                
+                if (!telegramId && user) {
+                    telegramId = String(user.id);
+                }
+                
+                if (user) {
+                    const displayName = [user.first_name, user.last_name].filter(Boolean).join(' ');
+                    document.getElementById('profile-name').textContent = displayName || 'Usuario NutriAR';
+                    document.getElementById('profile-handle').textContent = user.username ? `@${user.username}` : 'Sin username';
+                    document.getElementById('user-initial').textContent = (user.first_name || 'U').charAt(0).toUpperCase();
+
+                    if (telegramId && displayName) {
+                        await registrarUsuario(telegramId, displayName);
+                    }
                 }
             }
 
             if (telegramId) {
                 await cargarPerfil();
             } else {
-                document.getElementById('profile-subtitle').textContent = 'Abre esta app desde Telegram para ver tu perfil';
-                document.getElementById('medical-section').innerHTML = '<div class="text-center text-on-surface-variant mt-10">⚠️ Debes abrir esta página desde Telegram.</div>';
+                document.getElementById('profile-subtitle').textContent = 'Abre desde Telegram';
             }
         });
 
-        function goToScanner() {
-            if (telegramId) {
-                window.location.href = '/?telegram_id=' + telegramId;
-            } else {
-                window.location.href = '/';
-            }
+        async function registrarUsuario(telegramId, nombre) {
+            const formData = new FormData();
+            formData.append('telegram_id', telegramId);
+            formData.append('nombre', nombre);
+            await fetch(`${apiBaseUrl}/api/registrar_usuario`, {
+                method: 'POST',
+                body: formData
+            });
         }
 
-        function goToHistory() {
-            if (telegramId) {
-                window.location.href = '/historial?telegram_id=' + telegramId;
-            } else {
-                window.location.href = '/historial';
-            }
-        }
+        function goToScanner() { window.location.href = `/?telegram_id=${telegramId}`; }
+        function goToHistory() { window.location.href = `/historial?telegram_id=${telegramId}`; }
 
         async function cargarPerfil() {
             try {
-                const response = await fetch(`${apiBaseUrl}/api/usuario/${telegramId}`);
-                const data = await response.json();
-                if (data.status === 'success') {
-                    renderPerfil(data.usuario);
-                } else {
-                    throw new Error(data.error || 'No se pudo cargar perfil');
+                // 1. Cargar el catálogo total de la Base de Datos
+                const resCatalog = await fetch(`${apiBaseUrl}/api/restricciones`);
+                const dataCatalog = await resCatalog.json();
+
+                const legacyNames = new Set([
+                    'Preferencia: Sin Azúcar Añadida',
+                    'Preferencia: Sin Gluten',
+                    'Preferencia: Vegano',
+                    'Preferencia: Vegetariano'
+                ]);
+
+                const allCatalog = [
+                    ...(dataCatalog.restricciones.condiciones_medicas || []),
+                    ...(dataCatalog.restricciones.alergias || []),
+                    ...(dataCatalog.restricciones.preferencias || [])
+                ].filter(rest => !legacyNames.has(rest.nombre));
+
+                const uniqueCatalog = allCatalog.filter((rest, index, self) =>
+                    self.findIndex(item => item.nombre === rest.nombre) === index
+                );
+
+                const catalogMedical = uniqueCatalog.filter(r => r.tipo !== 'preferencia');
+                const catalogWellness = uniqueCatalog.filter(r => r.tipo === 'preferencia');
+
+                // 2. Cargar lo que el usuario tiene activo
+                const resUser = await fetch(`${apiBaseUrl}/api/usuario/${telegramId}`);
+                const dataUser = await resUser.json();
+                
+                const userActiveIds = dataUser.usuario.restricciones.map(r => r.id);
+                const userActiveNames = dataUser.usuario.restricciones.map(r => r.nombre);
+
+                const dbName = dataUser.usuario.nombre;
+                if (dbName) {
+                    document.getElementById('profile-name').textContent = dbName;
+                    document.getElementById('user-initial').textContent = dbName.charAt(0).toUpperCase();
                 }
+
+                // Actualizar texto de estado
+                document.getElementById('profile-status').textContent = userActiveNames.length > 0 
+                    ? `Activas: ${userActiveNames.slice(0, 2).join(', ')}${userActiveNames.length > 2 ? '...' : ''}` 
+                    : 'Sin restricciones activas';
+                document.getElementById('profile-subtitle').textContent = 'Edita tus condiciones';
+
+                // 3. Separar por secciones y dibujar
+                let htmlMedical = '';
+                let htmlWellness = '';
+
+                const renderToggle = (rest) => {
+                    const gui = GUI_CONFIG[rest.nombre] || { icon: "label", section: "medical" };
+                    const isActive = userActiveIds.includes(rest.id);
+                    return `
+                        <button type="button" onclick="toggleRestriction(${rest.id}, this)" class="w-full flex items-center justify-between px-4 py-4 bg-white active:bg-surface-container transition-colors group">
+                            <div class="flex items-center gap-3">
+                                <span class="material-symbols-outlined text-[22px] ${isActive ? 'text-primary' : 'text-outline-variant group-hover:text-on-surface-variant transition-colors'}">${gui.icon}</span>
+                                <span class="font-medium text-[14px] ${isActive ? 'text-on-surface' : 'text-on-surface-variant'}">${rest.nombre}</span>
+                            </div>
+                            
+                            <!-- Toggle (Switch) de Tailwind -->
+                            <div class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ease-in-out ${isActive ? 'bg-primary' : 'bg-surface-dim'}">
+                                <span class="inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-300 ease-in-out ${isActive ? 'translate-x-5' : 'translate-x-1'}"></span>
+                            </div>
+                        </button>
+                    `;
+                };
+
+                catalogMedical.forEach(rest => {
+                    htmlMedical += renderToggle(rest);
+                });
+                catalogWellness.forEach(rest => {
+                    htmlWellness += renderToggle(rest);
+                });
+
+                document.getElementById('medical-section').innerHTML = htmlMedical || '<div class="p-4 text-center text-sm text-outline">Sin opciones médicas</div>';
+                document.getElementById('wellness-section').innerHTML = htmlWellness || '<div class="p-4 text-center text-sm text-outline">Sin opciones de bienestar</div>';
+
             } catch (err) {
                 console.error('Error cargando perfil:', err);
-                document.getElementById('profile-subtitle').textContent = 'No se pudo cargar tu perfil';
-                document.getElementById('medical-section').innerHTML = '<div class="text-center text-on-surface-variant mt-10">Error de conexión.</div>';
+                document.getElementById('profile-status').textContent = 'Error de conexión';
             }
         }
 
-        function renderPerfil(usuario) {
-            document.getElementById('profile-name').textContent = usuario.nombre || 'Usuario NutriAR';
-            document.getElementById('profile-handle').textContent = `@${usuario.telegram_id}`;
-            document.getElementById('profile-subtitle').textContent = 'Edita tus condiciones y preferencias';
+        async function toggleRestriction(restriccionId, buttonElement) {
+            buttonElement.style.pointerEvents = 'none'; // Prevenir doble clic
 
-            const activeRestrictions = usuario.restricciones.map(r => r.nombre);
-            document.getElementById('profile-status').textContent = activeRestrictions.length > 0
-                ? `Configurado: ${activeRestrictions.join(', ')}`
-                : 'Aún no tienes restricciones activas';
+            try {
+                // Enviar la petición JSON correcta al backend
+                const response = await fetch(`${apiBaseUrl}/api/usuario/${telegramId}/restricciones`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ restriccion_id: restriccionId })
+                });
 
-            const selected = new Set(activeRestrictions);
-
-            document.getElementById('medical-section').innerHTML = medicalOptions.map(option => {
-                const active = selected.has(option.label);
-                return `
-                    <button type="button" onclick="toggleRestriction('${option.key}')" class="w-full bg-white rounded-3xl border ${active ? 'border-primary/30 shadow-sm' : 'border-outline-variant/50'} p-4 flex items-center justify-between gap-4 text-left transition-all hover:border-primary/40">
-                        <div class="flex items-center gap-3">
-                            <span class="material-symbols-outlined text-primary text-2xl">${option.icon}</span>
-                            <div>
-                                <p class="font-semibold">${option.label}</p>
-                                <p class="text-xs text-on-surface-variant mt-1">${active ? 'Activo' : 'No está activado'}</p>
-                            </div>
-                        </div>
-                        <span class="relative inline-flex h-6 w-12 flex-shrink-0 items-center rounded-full ${active ? 'bg-primary' : 'bg-surface-container'} transition-colors">
-                            <span class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${active ? 'translate-x-6' : 'translate-x-1'}"></span>
-                        </span>
-                    </button>
-                `;
-            }).join('');
-
-            document.getElementById('wellness-section').innerHTML = wellnessOptions.map(option => {
-                const active = selected.has(option.label);
-                return `
-                    <button type="button" onclick="toggleRestriction('${option.key}')" class="w-full bg-white rounded-3xl border ${active ? 'border-primary/30 shadow-sm' : 'border-outline-variant/50'} p-4 flex items-center justify-between gap-4 text-left transition-all hover:border-primary/40">
-                        <div class="flex items-center gap-3">
-                            <span class="material-symbols-outlined text-primary text-2xl">${option.icon}</span>
-                            <div>
-                                <p class="font-semibold">${option.label}</p>
-                                <p class="text-xs text-on-surface-variant mt-1">${active ? 'Activo' : 'No está activado'}</p>
-                            </div>
-                        </div>
-                        <span class="relative inline-flex h-6 w-12 flex-shrink-0 items-center rounded-full ${active ? 'bg-primary' : 'bg-surface-container'} transition-colors">
-                            <span class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${active ? 'translate-x-6' : 'translate-x-1'}"></span>
-                        </span>
-                    </button>
-                `;
-            }).join('');
-        }
-
-        async function toggleRestriction(key) {
-            if (!telegramId) return;
-
-            const response = await fetch(`${apiBaseUrl}/api/usuario/${telegramId}/restricciones`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ restriccion_id: await resolveRestrictionId(key) })
-            });
-
-            const data = await response.json();
-            if (data.status === 'success') {
-                await cargarPerfil();
-            } else {
-                alert(data.error || 'No se pudo actualizar la restricción');
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    // Refrescar el diseño para que el switch se ponga azul (o gris si se apagó)
+                    await cargarPerfil();
+                } else {
+                    alert(data.error || 'No se pudo actualizar');
+                }
+            } catch (err) {
+                console.error('Error:', err);
+                alert('Fallo de conexión al guardar.');
+            } finally {
+                buttonElement.style.pointerEvents = 'auto';
             }
-        }
-
-        async function resolveRestrictionId(key) {
-            const response = await fetch(`${apiBaseUrl}/api/restricciones`);
-            const data = await response.json();
-            if (data.status !== 'success') return null;
-
-            const allRestrictions = [...data.restricciones.condiciones_medicas, ...data.restricciones.alergias, ...data.restricciones.preferencias];
-            const labelMap = {
-                celiaquia: 'Celiaquía',
-                diabetes: 'Diabetes Tipo 2',
-                alergia_leche: 'Alergia a Lácteos',
-                alergia_soya: 'Alergia a Soya',
-                alergia_mani: 'Alergia a Maní',
-                alergia_mariscos: 'Alergia a Mariscos',
-                alergia_huevo: 'Alergia a Huevo',
-                alergia_frutos_secos: 'Alergia a Frutos Secos',
-                vegano: 'Preferencia: Vegano',
-                sin_azucar: 'Preferencia: Sin Azúcar Añadida',
-                ultraprocesados: 'Evitar Ultraprocesados'
-            };
-            const label = labelMap[key];
-            const restriction = allRestrictions.find(r => r.nombre === label);
-            return restriction ? restriction.id : null;
         }
     </script>
 </body>

@@ -102,19 +102,21 @@
     </main>
 
     <!-- BottomNavBar -->
-    <nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-6 pb-6 pt-3 bg-[#f9f9f9] dark:bg-[#1a1c1c] shadow-[0_-8px_32px_rgba(26,28,28,0.06)] rounded-t-2xl border-t-[0.5px] border-[#1a1c1c]/15">
-        <button onclick="goToScanner()" class="flex flex-col items-center justify-center text-[#1a1c1c] dark:text-[#f9f9f9] opacity-50 hover:opacity-80 transition-opacity active:scale-90 duration-200">
-            <span class="material-symbols-outlined" data-icon="barcode_scanner">barcode_scanner</span>
-            <span class="font-['Inter'] text-[11px] font-medium tracking-wide uppercase mt-1">Escanear</span>
-        </button>
-        <button class="flex flex-col items-center justify-center text-[#005f9e] dark:text-[#4dabf7] font-bold scale-110">
-            <span class="material-symbols-outlined" data-icon="history" style="font-variation-settings: 'FILL' 1;">history</span>
-            <span class="font-['Inter'] text-[11px] font-medium tracking-wide uppercase mt-1">Historial</span>
-        </button>
-        <button class="flex flex-col items-center justify-center text-[#1a1c1c] dark:text-[#f9f9f9] opacity-50 hover:opacity-80 transition-opacity active:scale-90 duration-200">
-            <span class="material-symbols-outlined" data-icon="settings">settings</span>
-            <span class="font-['Inter'] text-[11px] font-medium tracking-wide uppercase mt-1">Perfil</span>
-        </button>
+    <nav class="fixed bottom-0 left-0 w-full z-50 bg-[#f9f9f9] shadow-[0_-4px_24px_rgba(0,0,0,0.05)] border-t border-outline-variant/20">
+        <div class="flex justify-around items-center h-16 px-4 pb-2 w-full">
+            <button onclick="goToScanner()" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors px-4 py-1 active:scale-95">
+                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">barcode_scanner</span>
+                <span class="text-[10px] font-bold tracking-wider uppercase mt-0.5">Escanear</span>
+            </button>
+            <button onclick="goToHistory()" class="flex flex-col items-center justify-center text-primary font-bold px-4 py-1 active:scale-95">
+                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">history</span>
+                <span class="text-[10px] font-bold tracking-wider uppercase mt-0.5">Historial</span>
+            </button>
+            <button onclick="goToPerfil()" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors px-4 py-1 active:scale-95">
+                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">person</span>
+                <span class="text-[10px] font-bold tracking-wider uppercase mt-0.5">Perfil</span>
+            </button>
+        </div>
     </nav>
 
     <!-- LÓGICA DEL HISTORIAL -->
