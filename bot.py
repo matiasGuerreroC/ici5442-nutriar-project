@@ -72,7 +72,7 @@ RESTRICCIONES_PREDEFINIDAS = {
     "diabetes": {"nombre": "Diabetes Tipo 2", "tipo": "condicion_medica"},
     "intolerancia_lactosa": {"nombre": "Intolerancia a la Lactosa", "tipo": "condicion_medica"},
     "alergia_mani": {"nombre": "Alergia a Maní", "tipo": "alergia"},
-    "alergia_leche": {"nombre": "Alergia a Leche", "tipo": "alergia"},
+    "alergia_leche": {"nombre": "Alergia a Lácteos", "tipo": "alergia"},
     "alergia_huevo": {"nombre": "Alergia a Huevo", "tipo": "alergia"},
     "alergia_pescado": {"nombre": "Alergia a Pescado", "tipo": "alergia"},
     "alergia_mariscos": {"nombre": "Alergia a Mariscos", "tipo": "alergia"},
@@ -82,7 +82,7 @@ RESTRICCIONES_PREDEFINIDAS = {
     "sin_gluten": {"nombre": "Sin Gluten", "tipo": "preferencia"},
     "vegano": {"nombre": "Vegano", "tipo": "preferencia"},
     "vegetariano": {"nombre": "Vegetariano", "tipo": "preferencia"},
-    "ultraprocesados": {"nombre": "Evitar Ultraprocesados", "tipo": "preferencia"},
+    "ultraprocesados": {"nombre": "Evitar ultraprocesados", "tipo": "preferencia"},
 }
 
 LEGACY_RESTRICCIONES = {
@@ -94,72 +94,28 @@ LEGACY_RESTRICCIONES = {
 
 
 def inicializar_restricciones():
-    """Crea las restricciones predefinidas en la BD si no existen"""
+    """Crea las restricciones predefinidas en la BD forzando la escritura si no existen"""
     db = SessionLocal()
     try:
         for key, restriccion in RESTRICCIONES_PREDEFINIDAS.items():
+            # Buscamos ignorando mayúsculas para evitar duplicados falsos
             existe = db.query(Restriccion).filter(
-                Restriccion.nombre == restriccion["nombre"]
+                Restriccion.nombre.ilike(restriccion["nombre"])
             ).first()
+            
             if not existe:
-                legacy_name = LEGACY_RESTRICCIONES.get(key)
-                if legacy_name:
-                    legacy = db.query(Restriccion).filter(
-                        Restriccion.nombre == legacy_name
-                    ).first()
-                    if legacy:
-                        equivalent = db.query(Restriccion).filter(
-                            Restriccion.nombre == restriccion["nombre"]
-                        ).first()
-                        if equivalent:
-                            for usuario in list(legacy.usuarios):
-                                if equivalent not in usuario.restricciones:
-                                    usuario.restricciones.append(equivalent)
-                                if legacy in usuario.restricciones:
-                                    usuario.restricciones.remove(legacy)
-                            db.delete(legacy)
-                        else:
-                            legacy.nombre = restriccion["nombre"]
-                            legacy.tipo = restriccion["tipo"]
-                            db.add(legacy)
-                        continue
+                print(f"[BD] Insertando restricción faltante: {restriccion['nombre']}")
                 nueva = Restriccion(
                     nombre=restriccion["nombre"],
                     tipo=restriccion["tipo"]
                 )
                 db.add(nueva)
-
-        # Eliminar cualquier registro legacy que aún pueda existir en la BD
-        for key, legacy_nombre in LEGACY_RESTRICCIONES.items():
-            legacy = db.query(Restriccion).filter(
-                Restriccion.nombre == legacy_nombre
-            ).first()
-            if not legacy:
-                continue
-
-            target_nombre = RESTRICCIONES_PREDEFINIDAS[key]["nombre"]
-            target = db.query(Restriccion).filter(
-                Restriccion.nombre == target_nombre
-            ).first()
-
-            if target and target.id != legacy.id:
-                for usuario in list(legacy.usuarios):
-                    if target not in usuario.restricciones:
-                        usuario.restricciones.append(target)
-                    if legacy in usuario.restricciones:
-                        usuario.restricciones.remove(legacy)
-                db.delete(legacy)
-            elif not target:
-                legacy.nombre = target_nombre
-                legacy.tipo = "preferencia"
-                db.add(legacy)
-
         db.commit()
     except Exception as e:
-        print(f"[ERROR] No se pudieron inicializar restricciones: {e}")
+        print(f"[ERROR CRÍTICO BD] No se pudieron inicializar restricciones: {e}")
+        db.rollback() # Previene que la base de datos se quede bloqueada
     finally:
         db.close()
-
 
 
 def obtener_o_crear_usuario(telegram_id: str, nombre: str = None):

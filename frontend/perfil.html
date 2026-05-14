@@ -37,6 +37,7 @@
     </style>
 </head>
 <body class="bg-surface text-on-surface min-h-screen pb-24">
+    
     <!-- Header -->
     <header class="w-full sticky top-0 bg-white z-50 border-b border-outline-variant/50">
         <div class="flex items-center justify-between px-4 py-4">
@@ -65,21 +66,21 @@
             </div>
         </section>
 
-        <!-- Condiciones Médicas y Alergias -->
+        <!-- Condiciones Médicas y Alergias (GRUPO 1) -->
         <section class="mb-6">
             <div class="flex items-center justify-between mb-3">
                 <div>
-                    <p class="text-xs font-bold uppercase tracking-widest text-on-surface-variant/80">Mis Restricciones</p>
-                    <p class="text-xs text-on-surface-variant mt-0.5">Condiciones médicas y alergias activas</p>
+                    <p class="text-xs font-bold uppercase tracking-widest text-on-surface-variant/80">Condiciones médicas</p>
+                    <p class="text-xs text-on-surface-variant mt-0.5">Condiciones médicas activas</p>
                 </div>
             </div>
-            <div id="medical-section" class="bg-white rounded-3xl border border-outline-variant/30 overflow-hidden divide-y divide-outline-variant/20">
+            <div id="condiciones_medicas_alergias-section" class="bg-white rounded-3xl border border-outline-variant/30 overflow-hidden divide-y divide-outline-variant/20">
                 <!-- Se llena con JS -->
                 <div class="p-8 text-center text-outline-variant text-sm">Cargando opciones...</div>
             </div>
         </section>
 
-        <!-- Bienestar Preventivo -->
+        <!-- Bienestar Preventivo (GRUPO 2) -->
         <section class="mb-6">
             <div class="flex items-center justify-between mb-3">
                 <div>
@@ -87,7 +88,7 @@
                     <p class="text-xs text-on-surface-variant mt-0.5">Preferencias dietéticas electivas</p>
                 </div>
             </div>
-            <div id="wellness-section" class="bg-white rounded-3xl border border-outline-variant/30 overflow-hidden divide-y divide-outline-variant/20">
+            <div id="bienestar_preventivo-section" class="bg-white rounded-3xl border border-outline-variant/30 overflow-hidden divide-y divide-outline-variant/20">
                 <!-- Se llena con JS -->
                 <div class="p-8 text-center text-outline-variant text-sm">Cargando opciones...</div>
             </div>
@@ -141,30 +142,33 @@
         </div>
     </nav>
 
+
     <!-- LÓGICA DE PERFIL (Conecta con FastAPI) -->
     <script>
         const apiBaseUrl = window.location.origin;
         const urlParams = new URLSearchParams(window.location.search);
         let telegramId = urlParams.get('telegram_id');
 
-        // MAPEO EXACTO con los nombres del backend ("RESTRICCIONES_PREDEFINIDAS" en bot.py)
+        // MAPEO EXACTO: Qué icono lleva cada restricción y a qué grupo pertenece
         const GUI_CONFIG = {
-            "Celiaquía": { icon: "no_meals", section: "medical" },
-            "Diabetes Tipo 2": { icon: "monitor_heart", section: "medical" },
-            "Intolerancia a la Lactosa": { icon: "water_drop", section: "medical" },
-            "Alergia a Maní": { icon: "grain", section: "medical" },
-            "Alergia a Lácteos": { icon: "icecream", section: "medical" },
-            "Alergia a Huevo": { icon: "egg_alt", section: "medical" },
-            "Alergia a Pescado": { icon: "set_meal", section: "medical" },
-            "Alergia a Mariscos": { icon: "phishing", section: "medical" },
-            "Alergia a Frutos Secos": { icon: "forest", section: "medical" },
-            "Alergia a Soya": { icon: "eco", section: "medical" },
+            // GRUPO 1: Condiciones Médicas y Alergias
+            "celiaquía": { icon: "grass", section: "condiciones_medicas_alergias" },
+            "diabetes tipo 2": { icon: "bloodtype", section: "condiciones_medicas_alergias" },
+            "intolerancia a la lactosa": { icon: "water_drop", section: "condiciones_medicas_alergias" },
+            "alergia a lácteos": { icon: "icecream", section: "condiciones_medicas_alergias" },
+            "alergia a soya": { icon: "eco", section: "condiciones_medicas_alergias" },
+            "alergia a maní": { icon: "grain", section: "condiciones_medicas_alergias" },
+            "alergia a mariscos": { icon: "set_meal", section: "condiciones_medicas_alergias" },
+            "alergia a pescado": { icon: "phishing", section: "condiciones_medicas_alergias" },
+            "alergia a huevo": { icon: "egg_alt", section: "condiciones_medicas_alergias" },
+            "alergia a frutos secos": { icon: "forest", section: "condiciones_medicas_alergias" },
             
-            "Sin azúcar añadida": { icon: "no_drinks", section: "wellness" },
-            "Sin Gluten": { icon: "bakery_dining", section: "wellness" },
-            "Vegano": { icon: "psychiatry", section: "wellness" },
-            "Vegetariano": { icon: "spa", section: "wellness" },
-            "Evitar ultraprocesados": { icon: "restaurant_menu", section: "wellness" }
+            // GRUPO 2: Bienestar Preventivo
+            "sin azúcar añadida": { icon: "no_drinks", section: "bienestar_preventivo" },
+            "sin gluten": { icon: "bakery_dining", section: "bienestar_preventivo" },
+            "vegano": { icon: "psychiatry", section: "bienestar_preventivo" },
+            "vegetariano": { icon: "local_florist", section: "bienestar_preventivo" },
+            "evitar ultraprocesados": { icon: "fastfood", section: "bienestar_preventivo" }
         };
 
         document.addEventListener('DOMContentLoaded', async () => {
@@ -190,6 +194,8 @@
             }
 
             if (telegramId) {
+                // Forzamos la actualización de la BD al abrir el perfil
+                await fetch(`${apiBaseUrl}/api/restricciones/reinicializar`).catch(()=>console.log("No se requiere reinicio"));
                 await cargarPerfil();
             } else {
                 document.getElementById('profile-subtitle').textContent = 'Abre desde Telegram';
@@ -206,8 +212,10 @@
             });
         }
 
+        // Navegación
         function goToScanner() { window.location.href = `/?telegram_id=${telegramId}`; }
         function goToHistory() { window.location.href = `/historial?telegram_id=${telegramId}`; }
+        function goToPerfil() { window.location.href = `/perfil?telegram_id=${telegramId}`; }
 
         async function cargarPerfil() {
             try {
@@ -215,56 +223,64 @@
                 const resCatalog = await fetch(`${apiBaseUrl}/api/restricciones`);
                 const dataCatalog = await resCatalog.json();
 
-                const legacyNames = new Set([
-                    'Preferencia: Sin Azúcar Añadida',
-                    'Preferencia: Sin Gluten',
-                    'Preferencia: Vegano',
-                    'Preferencia: Vegetariano'
-                ]);
-
-                const allCatalog = [
+                // 2. Extraer todas las restricciones crudas de la BD
+                const allCatalogRaw = [
                     ...(dataCatalog.restricciones.condiciones_medicas || []),
                     ...(dataCatalog.restricciones.alergias || []),
                     ...(dataCatalog.restricciones.preferencias || [])
-                ].filter(rest => !legacyNames.has(rest.nombre));
+                ];
 
-                const uniqueCatalog = allCatalog.filter((rest, index, self) =>
-                    self.findIndex(item => item.nombre === rest.nombre) === index
-                );
+                // 3. Crear el array final eliminando duplicados mediante el "nombre normalizado"
+                const uniqueCatalog = [];
+                const seenNames = new Set();
 
-                const catalogMedical = uniqueCatalog.filter(r => r.tipo !== 'preferencia');
-                const catalogWellness = uniqueCatalog.filter(r => r.tipo === 'preferencia');
+                allCatalogRaw.forEach(rest => {
+                    // Limpiamos la palabra "Preferencia: " y normalizamos a minúsculas
+                    let cleanName = rest.nombre.replace('Preferencia: ', '').trim();
+                    let lookupKey = cleanName.toLowerCase();
 
-                // 2. Cargar lo que el usuario tiene activo
+                    // Si existe en nuestro GUI_CONFIG y no lo hemos procesado aún
+                    if (GUI_CONFIG[lookupKey] && !seenNames.has(lookupKey)) {
+                        seenNames.add(lookupKey);
+                        uniqueCatalog.push({
+                            id: rest.id,          // <--- ¡AQUÍ ESTÁ LA CLAVE! Usa el ID real de la Base de Datos
+                            nombre: cleanName,
+                            ...GUI_CONFIG[lookupKey]
+                        });
+                    }
+                });
+
+                // 4. Obtener lo que el usuario TIENE ACTIVO en la Base de Datos
                 const resUser = await fetch(`${apiBaseUrl}/api/usuario/${telegramId}`);
                 const dataUser = await resUser.json();
                 
                 const userActiveIds = dataUser.usuario.restricciones.map(r => r.id);
-                const userActiveNames = dataUser.usuario.restricciones.map(r => r.nombre);
+                const userActiveNames = dataUser.usuario.restricciones.map(r => r.nombre.replace('Preferencia: ', '').trim());
 
+                // Actualizar info de usuario en la Tarjeta
                 const dbName = dataUser.usuario.nombre;
                 if (dbName) {
                     document.getElementById('profile-name').textContent = dbName;
                     document.getElementById('user-initial').textContent = dbName.charAt(0).toUpperCase();
                 }
 
-                // Actualizar texto de estado
+                // Actualizar el "Status"
                 document.getElementById('profile-status').textContent = userActiveNames.length > 0 
                     ? `Activas: ${userActiveNames.slice(0, 2).join(', ')}${userActiveNames.length > 2 ? '...' : ''}` 
                     : 'Sin restricciones activas';
                 document.getElementById('profile-subtitle').textContent = 'Edita tus condiciones';
 
-                // 3. Separar por secciones y dibujar
-                let htmlMedical = '';
-                let htmlWellness = '';
+                // 5. DIBUJAR EN PANTALLA SEGÚN LOS 2 GRUPOS EXACTOS
+                let htmlCondicionesMedicasAlergias = '';
+                let htmlBienestarPreventivo = '';
 
-                const renderToggle = (rest) => {
-                    const gui = GUI_CONFIG[rest.nombre] || { icon: "label", section: "medical" };
+                uniqueCatalog.forEach(rest => {
                     const isActive = userActiveIds.includes(rest.id);
-                    return `
+                    
+                    const toggleHtml = `
                         <button type="button" onclick="toggleRestriction(${rest.id}, this)" class="w-full flex items-center justify-between px-4 py-4 bg-white active:bg-surface-container transition-colors group">
                             <div class="flex items-center gap-3">
-                                <span class="material-symbols-outlined text-[22px] ${isActive ? 'text-primary' : 'text-outline-variant group-hover:text-on-surface-variant transition-colors'}">${gui.icon}</span>
+                                <span class="material-symbols-outlined text-[24px] ${isActive ? 'text-primary' : 'text-outline-variant group-hover:text-on-surface-variant transition-colors'}">${rest.icon}</span>
                                 <span class="font-medium text-[14px] ${isActive ? 'text-on-surface' : 'text-on-surface-variant'}">${rest.nombre}</span>
                             </div>
                             
@@ -274,17 +290,18 @@
                             </div>
                         </button>
                     `;
-                };
 
-                catalogMedical.forEach(rest => {
-                    htmlMedical += renderToggle(rest);
-                });
-                catalogWellness.forEach(rest => {
-                    htmlWellness += renderToggle(rest);
+                    // Repartir el HTML en el grupo correcto
+                    if (rest.section === 'condiciones_medicas_alergias') {
+                        htmlCondicionesMedicasAlergias += toggleHtml;
+                    } else if (rest.section === 'bienestar_preventivo') {
+                        htmlBienestarPreventivo += toggleHtml;
+                    }
                 });
 
-                document.getElementById('medical-section').innerHTML = htmlMedical || '<div class="p-4 text-center text-sm text-outline">Sin opciones médicas</div>';
-                document.getElementById('wellness-section').innerHTML = htmlWellness || '<div class="p-4 text-center text-sm text-outline">Sin opciones de bienestar</div>';
+                // Inyectar en el DOM
+                document.getElementById('condiciones_medicas_alergias-section').innerHTML = htmlCondicionesMedicasAlergias || '<div class="p-4 text-center text-sm text-outline">Error: Base de datos vacía</div>';
+                document.getElementById('bienestar_preventivo-section').innerHTML = htmlBienestarPreventivo || '<div class="p-4 text-center text-sm text-outline">Error: Base de datos vacía</div>';
 
             } catch (err) {
                 console.error('Error cargando perfil:', err);
@@ -293,10 +310,10 @@
         }
 
         async function toggleRestriction(restriccionId, buttonElement) {
-            buttonElement.style.pointerEvents = 'none'; // Prevenir doble clic
+            buttonElement.style.pointerEvents = 'none'; // Prevenir doble clic o rebotes
 
             try {
-                // Enviar la petición JSON correcta al backend
+                // Enviar el ID real numérico a FastAPI
                 const response = await fetch(`${apiBaseUrl}/api/usuario/${telegramId}/restricciones`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -306,16 +323,16 @@
                 const data = await response.json();
                 
                 if (data.status === 'success') {
-                    // Refrescar el diseño para que el switch se ponga azul (o gris si se apagó)
+                    // Refrescar el perfil de inmediato para que el switch cambie a azul
                     await cargarPerfil();
                 } else {
-                    alert(data.error || 'No se pudo actualizar');
+                    alert(data.error || 'No se pudo actualizar en la base de datos');
                 }
             } catch (err) {
                 console.error('Error:', err);
                 alert('Fallo de conexión al guardar.');
             } finally {
-                buttonElement.style.pointerEvents = 'auto';
+                buttonElement.style.pointerEvents = 'auto'; // Reactivar botón
             }
         }
     </script>

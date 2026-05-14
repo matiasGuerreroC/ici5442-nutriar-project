@@ -150,6 +150,14 @@
             }
         }
 
+        function goToPerfil() {
+            if (telegramId) {
+                window.location.href = '/perfil?telegram_id=' + telegramId;
+            } else {
+                window.location.href = '/perfil';
+            }
+        }
+
         async function cargarHistorial() {
             try {
                 const response = await fetch(`${apiBaseUrl}/api/historial/${telegramId}`);
