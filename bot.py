@@ -139,8 +139,9 @@ def obtener_o_crear_usuario(telegram_id: str, nombre: str = None):
         usuario = db.query(Usuario).filter(Usuario.telegram_id == str(telegram_id)).first()
         if not usuario:
             final_name = nombre or f"Telegram {telegram_id}"
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] 👤 Registrando nuevo usuario: {final_name}")
-            id = db.query(Usuario).count() + 1 
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] 👤 Registrando nuevo usuario: {final_name}")            
+            existing_ids = {u.id for u in db.query(Usuario).all()}
+            id = min(set(range(1, len(existing_ids) + 2)) - existing_ids) if existing_ids else 1
             usuario = Usuario(id=id, telegram_id=str(telegram_id), nombre=final_name)
             db.add(usuario)
             db.commit()
@@ -515,7 +516,14 @@ async def analizar_desde_web(image: UploadFile = File(None), image_base64: str =
 
         # 3. GUARDAR EN EL HISTORIAL (NEON DB)
         db = SessionLocal()
+        
+        # Reiniciar id del historial si no existen datos en la tabla
+        id = 1
+        if db.query(HistorialProducto).count() > 0:
+            id = db.query(HistorialProducto).order_by(HistorialProducto.id.desc()).first().id + 1
+        
         nuevo_historial = HistorialProducto(
+            id=id,
             usuario_id=usuario.id,
             desc_breve_producto="Escaneo desde WebApp",
             es_apto=datos.get("es_apto", False),
@@ -560,10 +568,13 @@ def enviar_bienvenida(message):
     btn_scanner = types.KeyboardButton(text="🚀 Abrir Escáner NutriAR", web_app=types.WebAppInfo(webapp_url_scanner))
     btn_historial = types.KeyboardButton(text="📊 Ver Historial", web_app=types.WebAppInfo(webapp_url_historial))
     btn_perfil = types.KeyboardButton(text="👤 Configurar Perfil", web_app=types.WebAppInfo(webapp_url_perfil))
-    
-    markup.add(btn_scanner)
-    markup.add(btn_historial)
-    markup.add(btn_perfil)
+    # Si el usuario NO tiene restricciones, mostramos solo el botón de configurar perfil
+    if not tiene_restricciones:
+        markup.add(btn_perfil)
+    else:
+        markup.add(btn_scanner)
+        markup.add(btn_historial)
+        markup.add(btn_perfil)
 
     if tiene_restricciones:
         mensaje = (
@@ -693,7 +704,14 @@ def analizar_etiqueta(message):
         
         # Guardar en historial de BD
         db = SessionLocal()
+        
+        # Reiniciar id del historial si no existen datos en la tabla
+        id = 1
+        if db.query(HistorialProducto).count() > 0:
+            id = db.query(HistorialProducto).order_by(HistorialProducto.id.desc()).first().id + 1
+        
         nuevo_historial = HistorialProducto(
+            id=id,
             usuario_id=usuario.id,
             desc_breve_producto="Escaneo desde Telegram",
             es_apto=datos.get("es_apto", False),
@@ -908,6 +926,22 @@ def perfil_listo(call):
     except telebot.apihelper.ApiTelegramException as e:
         if "message is not modified" not in str(e):
             raise e # Si es otro error, que lo muestre
+
+    # Enviar teclado de menú completo ahora que el usuario completó su perfil
+    try:
+        webapp_url_scanner = f"{WEBAPP_URL.rstrip('/')}?telegram_id={call.from_user.id}"
+        webapp_url_historial = f"{WEBAPP_URL.rstrip('/')}/historial?telegram_id={call.from_user.id}"
+        webapp_url_perfil = f"{WEBAPP_URL.rstrip('/')}/perfil?telegram_id={call.from_user.id}"
+        markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+        btn_scanner = types.KeyboardButton(text="🚀 Abrir Escáner NutriAR", web_app=types.WebAppInfo(webapp_url_scanner))
+        btn_historial = types.KeyboardButton(text="📊 Ver Historial", web_app=types.WebAppInfo(webapp_url_historial))
+        btn_perfil = types.KeyboardButton(text="👤 Configurar Perfil", web_app=types.WebAppInfo(webapp_url_perfil))
+        markup.add(btn_scanner)
+        markup.add(btn_historial)
+        markup.add(btn_perfil)
+        bot.send_message(call.message.chat.id, "Menú actualizado: ahora puedes usar el Escáner y ver tu Historial.", reply_markup=markup)
+    except Exception:
+        pass
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "header")
