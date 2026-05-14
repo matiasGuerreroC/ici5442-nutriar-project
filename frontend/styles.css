@@ -1,0 +1,113 @@
+/* =========================================
+   1. CONFIGURACIÓN BASE
+   ========================================= */
+
+/* Configuración de íconos de Google Material Symbols */
+.material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Mejora visual para la cámara (más contraste para leer mejor las letras pequeñas) */
+#camera-feed {
+    filter: saturate(1.1) contrast(1.05);
+}
+
+/* =========================================
+   2. DISEÑO DEL ESCÁNER (WebAR)
+   ========================================= */
+
+/* Máscara oscura alrededor del cuadro central de escaneo */
+.scanner-overlay {
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(2px);
+}
+
+/* Esquinas blancas del cuadro de escaneo */
+.viewfinder-corner {
+    width: 40px;
+    height: 40px;
+    position: absolute;
+}
+
+/* Línea de escaneo láser que sube y baja */
+@keyframes scan {
+    0%, 100% { top: 0; opacity: 0; }
+    10% { opacity: 1; }
+    50% { top: 100%; opacity: 1; }
+    90% { opacity: 0; }
+}
+
+.scan-line {
+    animation: scan 2.5s ease-in-out infinite;
+}
+
+/* PANEELES DE CRISTAL */
+.glass-panel {
+    background: rgba(47, 49, 49, 0.7);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+}
+
+/* =========================================
+   3. ESTADOS DINÁMICOS DE LA UI 
+   ========================================= */
+
+/* Tarjeta de resultado (Oculta abajo de la pantalla por defecto) */
+.result-card {
+    transform: translateY(150%);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
+}
+
+/* Tarjeta de resultado (Se activa al recibir el JSON de Groq) */
+.result-card.visible {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto; /* Permite hacer clic en el botón de re-escanear */
+}
+
+/* Estado del botón blanco de captura cuando está procesando la IA */
+.scanning-active {
+    opacity: 0.5;
+    pointer-events: none; /* Desactiva el botón para que no hagan doble clic y saturen la API */
+    transform: scale(0.9);
+}
+
+/* Etiqueta flotante de "Analizando IA..." (Oculta por defecto) */
+.loading-state {
+    opacity: 0;
+    transform: translate(-50%, -10px) scale(0.9);
+    pointer-events: none;
+    transition: all 0.3s ease;
+}
+
+/* Etiqueta flotante (Visible) */
+.loading-state.visible {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+}
+
+/* DESTELLOS DE ALERTA DINÁMICOS (Resplandor en los bordes de la tarjeta) */
+.alert-glow-danger { box-shadow: 0 0 40px rgba(186, 26, 26, 0.5); }
+.alert-glow-success { box-shadow: 0 0 40px rgba(0, 110, 40, 0.5); }
+.alert-glow-info { box-shadow: 0 0 40px rgba(0, 95, 158, 0.5); }
+
+/* =========================================
+   4. COLORES DINÁMICOS PARA EL BADGE (Inyectados por app.js)
+   ========================================= */
+   
+.bg-ok { 
+    background-color: #d1fae5 !important; 
+    color: #065f46 !important; 
+} /* Verde Apto */
+
+.bg-warning { 
+    background-color: #fee2e2 !important; 
+    color: #991b1b !important; 
+} /* Rojo Peligro */
+
+.bg-info { 
+    background-color: #e0f2fe !important; 
+    color: #075985 !important; 
+} /* Azul Info/Error */

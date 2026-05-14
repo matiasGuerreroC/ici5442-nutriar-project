@@ -3,6 +3,7 @@ import json
 import os
 import socket
 import threading
+import unicodedata
 import requests
 from datetime import datetime
 from html import escape
@@ -10,9 +11,10 @@ from io import BytesIO
 
 import telebot
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Depends
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Depends, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from groq import Groq
 from PIL import Image
 from telebot import types
@@ -48,6 +50,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
 # --- PERFIL DE USUARIO ESTÁTICO (Para la PoC) ---
 # perfil_usuario = {
@@ -70,38 +73,63 @@ RESTRICCIONES_PREDEFINIDAS = {
     "diabetes": {"nombre": "Diabetes Tipo 2", "tipo": "condicion_medica"},
     "intolerancia_lactosa": {"nombre": "Intolerancia a la Lactosa", "tipo": "condicion_medica"},
     "alergia_mani": {"nombre": "Alergia a Maní", "tipo": "alergia"},
-    "alergia_leche": {"nombre": "Alergia a Leche", "tipo": "alergia"},
+    "alergia_leche": {"nombre": "Alergia a Lácteos", "tipo": "alergia"},
     "alergia_huevo": {"nombre": "Alergia a Huevo", "tipo": "alergia"},
     "alergia_pescado": {"nombre": "Alergia a Pescado", "tipo": "alergia"},
     "alergia_mariscos": {"nombre": "Alergia a Mariscos", "tipo": "alergia"},
     "alergia_frutos_secos": {"nombre": "Alergia a Frutos Secos", "tipo": "alergia"},
-    "sin_azucar": {"nombre": "Preferencia: Sin Azúcar Añadida", "tipo": "preferencia"},
-    "sin_gluten": {"nombre": "Preferencia: Sin Gluten", "tipo": "preferencia"},
-    "vegano": {"nombre": "Preferencia: Vegano", "tipo": "preferencia"},
-    "vegetariano": {"nombre": "Preferencia: Vegetariano", "tipo": "preferencia"},
+    "alergia_soya": {"nombre": "Alergia a Soya", "tipo": "alergia"},
+    "sin_azucar": {"nombre": "Sin azúcar añadida", "tipo": "preferencia"},
+    "sin_gluten": {"nombre": "Sin Gluten", "tipo": "preferencia"},
+    "vegano": {"nombre": "Vegano", "tipo": "preferencia"},
+    "vegetariano": {"nombre": "Vegetariano", "tipo": "preferencia"},
+    "ultraprocesados": {"nombre": "Evitar ultraprocesados", "tipo": "preferencia"},
+    "hipertension": {"nombre": "Hipertensión", "tipo": "condicion_medica"},
+    "resistencia_insulina": {"nombre": "Resistencia a la Insulina", "tipo": "condicion_medica"},
 }
+
+def normalizar_texto(texto: str) -> str:
+    """Normaliza texto para comparar nombres de restricciones sin depender de tildes o mayúsculas."""
+    texto = texto or ""
+    texto = unicodedata.normalize("NFKD", texto)
+    texto = "".join(ch for ch in texto if not unicodedata.combining(ch))
+    return texto.lower().strip()
 
 
 def inicializar_restricciones():
-    """Crea las restricciones predefinidas en la BD si no existen"""
+    """Crea las restricciones predefinidas en la BD forzando la escritura si no existen"""
     db = SessionLocal()
     try:
+        existentes = db.query(Restriccion).all()
+        existentes_por_normalizado = {
+            normalizar_texto(restriccion.nombre): restriccion
+            for restriccion in existentes
+        }
+
         for key, restriccion in RESTRICCIONES_PREDEFINIDAS.items():
-            existe = db.query(Restriccion).filter(
-                Restriccion.nombre == restriccion["nombre"]
-            ).first()
-            if not existe:
+            clave_normalizada = normalizar_texto(restriccion["nombre"])
+            existe = existentes_por_normalizado.get(clave_normalizada)
+
+            if existe:
+                if existe.nombre != restriccion["nombre"] or existe.tipo != restriccion["tipo"]:
+                    existe.nombre = restriccion["nombre"]
+                    existe.tipo = restriccion["tipo"]
+            else:
+                print(f"[BD] Insertando restricción faltante: {restriccion['nombre']}")
+                id = len(existentes_por_normalizado) + 1
                 nueva = Restriccion(
+                    id=id,
                     nombre=restriccion["nombre"],
                     tipo=restriccion["tipo"]
                 )
                 db.add(nueva)
+                existentes_por_normalizado[clave_normalizada] = nueva
         db.commit()
     except Exception as e:
-        print(f"[ERROR] No se pudieron inicializar restricciones: {e}")
+        print(f"[ERROR CRÍTICO BD] No se pudieron inicializar restricciones: {e}")
+        db.rollback() # Previene que la base de datos se quede bloqueada
     finally:
         db.close()
-
 
 
 def obtener_o_crear_usuario(telegram_id: str, nombre: str = None):
@@ -110,9 +138,16 @@ def obtener_o_crear_usuario(telegram_id: str, nombre: str = None):
     try:
         usuario = db.query(Usuario).filter(Usuario.telegram_id == str(telegram_id)).first()
         if not usuario:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] 👤 Registrando nuevo usuario: {nombre}")
-            usuario = Usuario(telegram_id=str(telegram_id), nombre=nombre or "Usuario")
+            final_name = nombre or f"Telegram {telegram_id}"
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] 👤 Registrando nuevo usuario: {final_name}")            
+            existing_ids = {u.id for u in db.query(Usuario).all()}
+            id = min(set(range(1, len(existing_ids) + 2)) - existing_ids) if existing_ids else 1
+            usuario = Usuario(id=id, telegram_id=str(telegram_id), nombre=final_name)
             db.add(usuario)
+            db.commit()
+            db.refresh(usuario)
+        elif nombre and usuario.nombre != nombre:
+            usuario.nombre = nombre
             db.commit()
             db.refresh(usuario)
         
@@ -126,7 +161,7 @@ def obtener_o_crear_usuario(telegram_id: str, nombre: str = None):
         db.close()
 
 def obtener_prompt_sistema(usuario: Usuario):
-    """Genera el System Prompt dinámico leyendo la BD de Neon"""
+    """Genera el System Prompt dinámico leyendo la BD de Neon y aplicando Chain of Thought (CoT)"""
     
     if usuario and usuario.restricciones:
         # Extraer los nombres de las restricciones reales de la BD
@@ -136,16 +171,19 @@ def obtener_prompt_sistema(usuario: Usuario):
         contexto_medico = "El usuario no tiene restricciones médicas registradas. Realiza un análisis nutricional general."
 
     return f"""
-    Eres un asistente experto en salud y lectura de etiquetas nutricionales.
+    Eres un asistente médico experto en salud y lectura de etiquetas nutricionales.
     {contexto_medico}
     
-    Analiza los ingredientes y la tabla nutricional de la imagen adjunta.
-    Cruza la información de la imagen con las condiciones del usuario para determinar si es apto.
+    INSTRUCCIONES CRÍTICAS:
+    1. Lee cuidadosamente TODOS los ingredientes y la tabla nutricional de la imagen adjunta.
+    2. Realiza un razonamiento paso a paso (Chain of Thought) cruzando cada ingrediente con las restricciones del usuario. Piensa en posibles nombres técnicos o contaminación cruzada.
+    3. Una vez hecho el análisis, determina si el producto es apto.
     
     DEBES responder ÚNICAMENTE en formato JSON con la siguiente estructura exacta:
     {{
+        "analisis_paso_a_paso": "Escribe aquí tu razonamiento detallado evaluando los ingredientes frente a las restricciones ANTES de dar el veredicto.",
         "es_apto": booleano,
-        "ingredientes_peligrosos":["lista", "de", "ingredientes", "que", "hacen", "daño"],
+        "ingredientes_peligrosos": ["lista", "de", "ingredientes", "que", "hacen", "daño"],
         "razon": "Explicación breve de por qué es o no es apto"
     }}
     """
@@ -170,26 +208,45 @@ def analizar_imagen(image_bytes, usuario: Usuario):
     # AQUÍ ESTÁ LA MAGIA: Inyectamos el perfil real de la BD
     system_prompt = obtener_prompt_sistema(usuario)
 
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] 🚀 Enviando a Groq con perfil de BD...")
-    chat_completion = client.chat.completions.create(
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content":[
-                    {"type": "text", "text": "Analiza esta etiqueta y dame el JSON."},
-                    {"type": "image_url", "image_url": {"url": base64_image}},
+    # REINTENTOS CON BACKOFF EXPONENCIAL para evitar timeouts
+    max_intentos = 3
+    espera_base = 2  # segundos
+    
+    for intento in range(max_intentos):
+        try:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] 🚀 Enviando a Groq (intento {intento + 1}/{max_intentos})...")
+            
+            chat_completion = client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {
+                        "role": "user",
+                        "content":[
+                            {"type": "text", "text": "Analiza esta etiqueta y dame el JSON."},
+                            {"type": "image_url", "image_url": {"url": base64_image}},
+                        ],
+                    },
                 ],
-            },
-        ],
-        model=MODELO_VISION,
-        response_format={"type": "json_object"},
-        temperature=0.1,
-    )
+                model=MODELO_VISION,
+                response_format={"type": "json_object"},
+                temperature=0.1,
+                timeout=120.0,  # Timeout de 2 minutos para Groq
+            )
 
-    resultado_json = chat_completion.choices[0].message.content
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ ¡Respuesta recibida de Groq!")
-    return json.loads(resultado_json)
+            resultado_json = chat_completion.choices[0].message.content
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ ¡Respuesta recibida de Groq!")
+            return json.loads(resultado_json)
+            
+        except Exception as e:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ Error en intento {intento + 1}: {str(e)}")
+            
+            if intento < max_intentos - 1:
+                espera = espera_base * (2 ** intento)  # Backoff exponencial: 2s, 4s, 8s
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] ⏳ Esperando {espera}s antes de reintentar...")
+                time.sleep(espera)
+            else:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ Se agotaron los reintentos de Groq")
+                raise Exception(f"No se pudo conectar a Groq después de {max_intentos} intentos: {str(e)}")
 
 
 def construir_respuesta_humana(datos):
@@ -229,10 +286,28 @@ def formatear_respuesta_telegram(datos):
 @app.get("/")
 async def servir_index():
     try:
-        return FileResponse("index.html", media_type="text/html")
+        return FileResponse("frontend/index.html", media_type="text/html")
     except Exception as e:
         print(f"[ERROR] No se pudo cargar index.html: {e}")
         raise HTTPException(status_code=500, detail="No se pudo cargar index.html")
+
+
+@app.get("/historial")
+async def servir_historial():
+    try:
+        return FileResponse("frontend/historial.html", media_type="text/html")
+    except Exception as e:
+        print(f"[ERROR] No se pudo cargar historial.html: {e}")
+        raise HTTPException(status_code=500, detail="No se pudo cargar historial.html")
+
+
+@app.get("/perfil")
+async def servir_perfil():
+    try:
+        return FileResponse("frontend/perfil.html", media_type="text/html")
+    except Exception as e:
+        print(f"[ERROR] No se pudo cargar perfil.html: {e}")
+        raise HTTPException(status_code=500, detail="No se pudo cargar perfil.html")
 
 
 @app.get("/api/health")
@@ -262,9 +337,49 @@ async def setup_webhook():
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
+@app.get("/api/historial/{telegram_id}")
+async def obtener_historial(telegram_id: str):
+    """Obtiene el historial de análisis del usuario"""
+    db = SessionLocal()
+    try:
+        usuario = db.query(Usuario).filter(Usuario.telegram_id == str(telegram_id)).first()
+        
+        if not usuario:
+            return {"status": "error", "error": "Usuario no encontrado", "codigo": 404}
+        
+        # Obtener historial ordenado por fecha descendente (más reciente primero)
+        historial = db.query(HistorialProducto).filter(
+            HistorialProducto.usuario_id == usuario.id
+        ).order_by(HistorialProducto.fecha_hora_escaneo.desc()).all()
+        
+        historial_json = []
+        for item in historial:
+            historial_json.append({
+                "id": item.id,
+                "desc_breve_producto": item.desc_breve_producto,
+                "es_apto": item.es_apto,
+                "ingredientes_peligrosos": item.ingredientes_peligrosos or [],
+                "razon_alerta": item.razon_alerta,
+                "fecha_hora_escaneo": item.fecha_hora_escaneo.isoformat() if item.fecha_hora_escaneo else None,
+                "respuesta_json_llm": item.respuesta_json_llm
+            })
+        
+        return {
+            "status": "success",
+            "historial": historial_json,
+            "total": len(historial_json)
+        }
+    except Exception as e:
+        print(f"[ERROR] {e}")
+        return {"status": "error", "error": str(e), "codigo": 500}
+    finally:
+        db.close()
+
+
 @app.get("/api/restricciones")
 async def obtener_restricciones():
     """Obtiene todas las restricciones disponibles agrupadas por tipo"""
+    inicializar_restricciones()
     db = SessionLocal()
     try:
         restricciones = db.query(Restriccion).all()
@@ -287,10 +402,20 @@ async def obtener_restricciones():
         db.close()
 
 
+@app.post("/api/restricciones/reinicializar")
+async def reinicializar_restricciones():
+    """Reinicializa todas las restricciones predefinidas en la BD"""
+    try:
+        inicializar_restricciones()
+        return {"status": "success", "message": "Restricciones reinicializadas correctamente"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
 @app.get("/api/usuario/{telegram_id}")
-async def obtener_usuario(telegram_id: str):
+async def obtener_usuario(telegram_id: str, nombre: str = None):
     """Obtiene el perfil del usuario y sus restricciones"""
-    usuario = obtener_o_crear_usuario(telegram_id=telegram_id)
+    usuario = obtener_o_crear_usuario(telegram_id=telegram_id, nombre=nombre)
     db = SessionLocal()
     try:
         restricciones = [
@@ -312,30 +437,41 @@ async def obtener_usuario(telegram_id: str):
 
 
 @app.post("/api/usuario/{telegram_id}/restricciones")
-async def agregar_restriccion_usuario(telegram_id: str, restriccion_id: int):
-    """Agrega una restricción al usuario"""
+async def agregar_restriccion_usuario(telegram_id: str, payload: dict = Body(...)):
+    """Agrega o quita una restricción al usuario"""
+    restriccion_id = payload.get("restriccion_id")
+    if restriccion_id is None:
+        return {"status": "error", "error": "Campo restriccion_id es requerido", "codigo": 400}
+
     db = SessionLocal()
     try:
-        usuario = obtener_o_crear_usuario(telegram_id=telegram_id)
+        usuario = db.query(Usuario).filter(Usuario.telegram_id == str(telegram_id)).first()
+        if not usuario:
+            usuario = obtener_o_crear_usuario(telegram_id=telegram_id)
+            usuario = db.merge(usuario)
+
         restriccion = db.query(Restriccion).filter(Restriccion.id == restriccion_id).first()
-        
         if not restriccion:
             return {"status": "error", "error": "Restricción no encontrada", "codigo": 404}
-        
-        if restriccion not in usuario.restricciones:
-            usuario.restricciones.append(restriccion)
+
+        if restriccion in usuario.restricciones:
+            usuario.restricciones.remove(restriccion)
             db.commit()
             return {
                 "status": "success",
-                "message": f"Restricción '{restriccion.nombre}' agregada",
-                "restriccion": {"id": restriccion.id, "nombre": restriccion.nombre}
+                "message": f"Restricción '{restriccion.nombre}' eliminada",
+                "restriccion": {"id": restriccion.id, "nombre": restriccion.nombre},
+                "action": "removed"
             }
-        else:
-            return {
-                "status": "error",
-                "error": "Esta restricción ya está en tu perfil",
-                "codigo": 409
-            }
+
+        usuario.restricciones.append(restriccion)
+        db.commit()
+        return {
+            "status": "success",
+            "message": f"Restricción '{restriccion.nombre}' agregada",
+            "restriccion": {"id": restriccion.id, "nombre": restriccion.nombre},
+            "action": "added"
+        }
     except Exception as e:
         return {"status": "error", "error": str(e), "codigo": 500}
     finally:
@@ -343,7 +479,7 @@ async def agregar_restriccion_usuario(telegram_id: str, restriccion_id: int):
 
 
 @app.post("/api/registrar_usuario")
-async def registrar_usuario(telegram_id: str, nombre: str = "Usuario"):
+async def registrar_usuario(telegram_id: str = Form(...), nombre: str = Form(None)):
     """Endpoint para registrar/obtener usuario desde el WebApp"""
     usuario = obtener_o_crear_usuario(telegram_id=telegram_id, nombre=nombre)
     return {
@@ -380,7 +516,14 @@ async def analizar_desde_web(image: UploadFile = File(None), image_base64: str =
 
         # 3. GUARDAR EN EL HISTORIAL (NEON DB)
         db = SessionLocal()
+        
+        # Reiniciar id del historial si no existen datos en la tabla
+        id = 1
+        if db.query(HistorialProducto).count() > 0:
+            id = db.query(HistorialProducto).order_by(HistorialProducto.id.desc()).first().id + 1
+        
         nuevo_historial = HistorialProducto(
+            id=id,
             usuario_id=usuario.id,
             desc_breve_producto="Escaneo desde WebApp",
             es_apto=datos.get("es_apto", False),
@@ -419,13 +562,19 @@ def enviar_bienvenida(message):
         db.close()
     
     markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
-    webapp_url_with_id = f"{WEBAPP_URL.rstrip('/')}?telegram_id={message.from_user.id}"
-    web_app = types.WebAppInfo(webapp_url_with_id)
-    btn_scanner = types.KeyboardButton(text="🚀 Abrir Escáner NutriAR", web_app=web_app)
-    btn_perfil = types.KeyboardButton(text="👤 Configurar Perfil")
-    
-    markup.add(btn_scanner)
-    markup.add(btn_perfil)
+    webapp_url_scanner = f"{WEBAPP_URL.rstrip('/')}?telegram_id={message.from_user.id}"
+    webapp_url_historial = f"{WEBAPP_URL.rstrip('/')}/historial?telegram_id={message.from_user.id}"
+    webapp_url_perfil = f"{WEBAPP_URL.rstrip('/')}/perfil?telegram_id={message.from_user.id}"
+    btn_scanner = types.KeyboardButton(text="🚀 Abrir Escáner NutriAR", web_app=types.WebAppInfo(webapp_url_scanner))
+    btn_historial = types.KeyboardButton(text="📊 Ver Historial", web_app=types.WebAppInfo(webapp_url_historial))
+    btn_perfil = types.KeyboardButton(text="👤 Configurar Perfil", web_app=types.WebAppInfo(webapp_url_perfil))
+    # Si el usuario NO tiene restricciones, mostramos solo el botón de configurar perfil
+    if not tiene_restricciones:
+        markup.add(btn_perfil)
+    else:
+        markup.add(btn_scanner)
+        markup.add(btn_historial)
+        markup.add(btn_perfil)
 
     if tiene_restricciones:
         mensaje = (
@@ -433,6 +582,7 @@ def enviar_bienvenida(message):
             f"✓ Tu perfil está configurado.\n\n"
             f"Puedes:\n"
             f"• Usar el <b>Escáner NutriAR</b> para analizar productos\n"
+            f"• Ver tu <b>Historial</b> de análisis\n"
             f"• Enviarme fotos de etiquetas directamente\n"
             f"• Actualizar tu perfil en cualquier momento"
         )
@@ -449,6 +599,42 @@ def enviar_bienvenida(message):
         reply_markup=markup,
         parse_mode="HTML"
     )
+
+
+@bot.message_handler(func=lambda message: message.text in ["📊 Ver Historial", "Ver Historial"])
+def boton_historial(message):
+    """Handler para el botón de historial"""
+    usuario = obtener_o_crear_usuario(
+        telegram_id=message.from_user.id,
+        nombre=message.from_user.first_name or "Usuario"
+    )
+    
+    db = SessionLocal()
+    try:
+        historial_count = db.query(HistorialProducto).filter(
+            HistorialProducto.usuario_id == usuario.id
+        ).count()
+    finally:
+        db.close()
+    
+    if historial_count == 0:
+        bot.reply_to(
+            message,
+            "📭 Aún no tienes análisis registrados.\n\n"
+            "🚀 Usa el escáner para analizar tus primeros productos."
+        )
+    else:
+        markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+        webapp_url_with_id = f"{WEBAPP_URL.rstrip('/')}/historial?telegram_id={message.from_user.id}"
+        web_app = types.WebAppInfo(webapp_url_with_id)
+        btn = types.KeyboardButton(text="📊 Ver Historial Completo", web_app=web_app)
+        markup.add(btn)
+        bot.send_message(
+            message.chat.id,
+            f"📊 Abriendo tu historial de análisis...\n"
+            f"Total análisis: {historial_count}",
+            reply_markup=markup
+        )
 
 
 @bot.message_handler(func=lambda message: message.text == "👤 Configurar Perfil")
@@ -518,7 +704,14 @@ def analizar_etiqueta(message):
         
         # Guardar en historial de BD
         db = SessionLocal()
+        
+        # Reiniciar id del historial si no existen datos en la tabla
+        id = 1
+        if db.query(HistorialProducto).count() > 0:
+            id = db.query(HistorialProducto).order_by(HistorialProducto.id.desc()).first().id + 1
+        
         nuevo_historial = HistorialProducto(
+            id=id,
             usuario_id=usuario.id,
             desc_breve_producto="Escaneo desde Telegram",
             es_apto=datos.get("es_apto", False),
@@ -541,6 +734,59 @@ def analizar_etiqueta(message):
     finally:
         if db:
             db.close()
+
+
+@bot.message_handler(commands=["historial"])
+def ver_historial(message):
+    """Muestra el historial de análisis del usuario"""
+    usuario = obtener_o_crear_usuario(
+        telegram_id=message.from_user.id,
+        nombre=message.from_user.first_name or "Usuario"
+    )
+    
+    db = SessionLocal()
+    try:
+        # Obtener últimos 5 análisis
+        historial = db.query(HistorialProducto).filter(
+            HistorialProducto.usuario_id == usuario.id
+        ).order_by(HistorialProducto.fecha_hora_escaneo.desc()).limit(5).all()
+        
+        if not historial:
+            markup = types.InlineKeyboardMarkup()
+            webapp_url_with_id = f"{WEBAPP_URL.rstrip('/')}/?telegram_id={message.from_user.id}&tab=historial"
+            web_app = types.WebAppInfo(webapp_url_with_id)
+            markup.add(types.InlineKeyboardButton("📊 Ver Historial Completo", web_app=web_app))
+            
+            bot.reply_to(
+                message,
+                "📭 Aún no tienes análisis registrados.\n\n"
+                "🚀 Usa el escáner para analizar tus primeros productos.",
+                reply_markup=markup
+            )
+        else:
+            texto = "📊 <b>Tus últimos análisis:</b>\n\n"
+            
+            for idx, item in enumerate(historial, 1):
+                fecha = item.fecha_hora_escaneo.strftime("%d/%m %H:%M") if item.fecha_hora_escaneo else "N/A"
+                estado = "✅" if item.es_apto else "🛑"
+                texto += f"{idx}. {estado} {fecha}\n"
+                
+                if not item.es_apto and item.ingredientes_peligrosos:
+                    ingredientes = ", ".join(item.ingredientes_peligrosos[:2])
+                    if len(item.ingredientes_peligrosos) > 2:
+                        ingredientes += f" +{len(item.ingredientes_peligrosos) - 2}"
+                    texto += f"   ⚠️ {escape(ingredientes)}\n"
+                texto += "\n"
+            
+            # Botón para ver el historial completo
+            markup = types.InlineKeyboardMarkup()
+            webapp_url_with_id = f"{WEBAPP_URL.rstrip('/')}/historial?telegram_id={message.from_user.id}"
+            web_app = types.WebAppInfo(webapp_url_with_id)
+            markup.add(types.InlineKeyboardButton("📊 Ver Historial Completo", web_app=web_app))
+            
+            bot.reply_to(message, texto, reply_markup=markup, parse_mode="HTML")
+    finally:
+        db.close()
 
 
 @bot.message_handler(commands=["perfil"])
@@ -680,6 +926,22 @@ def perfil_listo(call):
     except telebot.apihelper.ApiTelegramException as e:
         if "message is not modified" not in str(e):
             raise e # Si es otro error, que lo muestre
+
+    # Enviar teclado de menú completo ahora que el usuario completó su perfil
+    try:
+        webapp_url_scanner = f"{WEBAPP_URL.rstrip('/')}?telegram_id={call.from_user.id}"
+        webapp_url_historial = f"{WEBAPP_URL.rstrip('/')}/historial?telegram_id={call.from_user.id}"
+        webapp_url_perfil = f"{WEBAPP_URL.rstrip('/')}/perfil?telegram_id={call.from_user.id}"
+        markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+        btn_scanner = types.KeyboardButton(text="🚀 Abrir Escáner NutriAR", web_app=types.WebAppInfo(webapp_url_scanner))
+        btn_historial = types.KeyboardButton(text="📊 Ver Historial", web_app=types.WebAppInfo(webapp_url_historial))
+        btn_perfil = types.KeyboardButton(text="👤 Configurar Perfil", web_app=types.WebAppInfo(webapp_url_perfil))
+        markup.add(btn_scanner)
+        markup.add(btn_historial)
+        markup.add(btn_perfil)
+        bot.send_message(call.message.chat.id, "Menú actualizado: ahora puedes usar el Escáner y ver tu Historial.", reply_markup=markup)
+    except Exception:
+        pass
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "header")

@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html class="light" lang="es">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+    <title>Perfil NutriAR</title>
+    
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              surface: "#f9f9f9",
+              "on-surface": "#1a1c1c",
+              "on-surface-variant": "#404751",
+              primary: "#005f9e",
+              "surface-container-lowest": "#ffffff",
+              "surface-container": "#f3f3f3",
+              "outline-variant": "#c0c7d3",
+              error: "#ba1a1a",
+              secondary: "#006e28"
+            },
+            fontFamily: { body: ["Inter"] }
+          }
+        }
+      }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface min-h-screen pb-24">
+    
+    <!-- Header -->
+    <header class="w-full sticky top-0 bg-white z-50 border-b border-outline-variant/50">
+        <div class="flex items-center justify-between px-4 py-4">
+            <div class="flex items-center gap-3">
+                <span class="material-symbols-outlined text-primary text-3xl">settings</span>
+                <div>
+                    <h1 class="font-semibold text-lg">Perfil</h1>
+                    <p id="profile-subtitle" class="text-sm text-on-surface-variant">Cargando tu configuración...</p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="px-4 pt-4 max-w-md mx-auto">
+        <!-- Tarjeta de Usuario -->
+        <section class="mb-6">
+            <div class="bg-white rounded-3xl shadow-sm border border-outline-variant/30 p-5">
+                <div class="flex items-center gap-4">
+                    <div class="w-16 h-16 rounded-3xl bg-primary/10 flex items-center justify-center text-primary text-3xl font-bold" id="user-initial">U</div>
+                    <div class="flex-1 min-w-0">
+                        <p id="profile-name" class="font-bold text-lg truncate">Usuario NutriAR</p>
+                        <p id="profile-handle" class="text-sm text-on-surface-variant truncate">@usuario</p>
+                        <p id="profile-status" class="text-[11px] text-primary mt-1 font-medium truncate">Cargando...</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Condiciones Médicas y Alergias (GRUPO 1) -->
+        <section class="mb-6">
+            <div class="flex items-center justify-between mb-3">
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-widest text-on-surface-variant/80">Condiciones médicas</p>
+                    <p class="text-xs text-on-surface-variant mt-0.5">Condiciones médicas activas</p>
+                </div>
+            </div>
+            <div id="condiciones_medicas_alergias-section" class="bg-white rounded-3xl border border-outline-variant/30 overflow-hidden divide-y divide-outline-variant/20">
+                <!-- Se llena con JS -->
+                <div class="p-8 text-center text-outline-variant text-sm">Cargando opciones...</div>
+            </div>
+        </section>
+
+        <!-- Bienestar Preventivo (GRUPO 2) -->
+        <section class="mb-6">
+            <div class="flex items-center justify-between mb-3">
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-widest text-on-surface-variant/80">Bienestar Preventivo</p>
+                    <p class="text-xs text-on-surface-variant mt-0.5">Preferencias dietéticas electivas</p>
+                </div>
+            </div>
+            <div id="bienestar_preventivo-section" class="bg-white rounded-3xl border border-outline-variant/30 overflow-hidden divide-y divide-outline-variant/20">
+                <!-- Se llena con JS -->
+                <div class="p-8 text-center text-outline-variant text-sm">Cargando opciones...</div>
+            </div>
+        </section>
+
+        <!-- Preferencias UI -->
+        <section class="mb-6">
+            <div class="flex items-center justify-between mb-3">
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-widest text-on-surface-variant/80">Preferencias de Cuenta</p>
+                </div>
+            </div>
+            <div class="bg-white rounded-3xl border border-outline-variant/30 overflow-hidden divide-y divide-outline-variant/20">
+                <button class="w-full p-4 flex items-center justify-between text-left active:bg-surface-container transition-colors">
+                    <div class="flex items-center gap-3">
+                        <span class="material-symbols-outlined text-on-surface-variant">notifications</span>
+                        <div>
+                            <p class="font-medium text-sm">Notificaciones de Alerta</p>
+                        </div>
+                    </div>
+                    <span class="material-symbols-outlined text-outline-variant text-sm">chevron_right</span>
+                </button>
+                <button class="w-full p-4 flex items-center justify-between text-left active:bg-surface-container transition-colors">
+                    <div class="flex items-center gap-3">
+                        <span class="material-symbols-outlined text-on-surface-variant">language</span>
+                        <div>
+                            <p class="font-medium text-sm">Idioma de Análisis</p>
+                        </div>
+                    </div>
+                    <span class="text-xs font-bold text-primary mr-1">Español</span>
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <!-- BottomNavBar -->
+    <nav class="fixed bottom-0 left-0 w-full z-50 bg-[#f9f9f9] shadow-[0_-4px_24px_rgba(0,0,0,0.05)] border-t border-outline-variant/20">
+        <div class="flex justify-around items-center h-16 px-4 pb-2 w-full">
+            <button onclick="goToScanner()" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors px-4 py-1 active:scale-95">
+                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">barcode_scanner</span>
+                <span class="text-[10px] font-bold tracking-wider uppercase mt-0.5">Escanear</span>
+            </button>
+            <button onclick="goToHistory()" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors px-4 py-1 active:scale-95">
+                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">history</span>
+                <span class="text-[10px] font-bold tracking-wider uppercase mt-0.5">Historial</span>
+            </button>
+            <button onclick="goToPerfil()" class="flex flex-col items-center justify-center text-primary font-bold px-4 py-1 active:scale-95">
+                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">person</span>
+                <span class="text-[10px] font-bold tracking-wider uppercase mt-0.5">Perfil</span>
+            </button>
+        </div>
+    </nav>
+
+
+    <!-- LÓGICA DE PERFIL (Conecta con FastAPI) -->
+    <script>
+        const apiBaseUrl = window.location.origin;
+        const urlParams = new URLSearchParams(window.location.search);
+        let telegramId = urlParams.get('telegram_id');
+
+        // MAPEO EXACTO: Qué icono lleva cada restricción y a qué grupo pertenece
+        const GUI_CONFIG = {
+            // GRUPO 1: Condiciones Médicas y Alergias
+            "Hipertensión": { icon: "health_and_safety", section: "condiciones_medicas_alergias" },
+            "Resistencia a la Insulina": { icon: "insights", section: "condiciones_medicas_alergias" },
+            "Celiaquía": { icon: "grass", section: "condiciones_medicas_alergias" },
+            "Diabetes tipo 2": { icon: "bloodtype", section: "condiciones_medicas_alergias" },
+            "Intolerancia a la lactosa": { icon: "water_drop", section: "condiciones_medicas_alergias" },
+            "Alergia a lácteos": { icon: "icecream", section: "condiciones_medicas_alergias" },
+            "Alergia a soya": { icon: "eco", section: "condiciones_medicas_alergias" },
+            "Alergia a maní": { icon: "grain", section: "condiciones_medicas_alergias" },
+            "Alergia a mariscos": { icon: "set_meal", section: "condiciones_medicas_alergias" },
+            "Alergia a pescado": { icon: "phishing", section: "condiciones_medicas_alergias" },
+            "Alergia a huevo": { icon: "egg_alt", section: "condiciones_medicas_alergias" },
+            "Alergia a frutos secos": { icon: "forest", section: "condiciones_medicas_alergias" },
+            
+            // GRUPO 2: Bienestar Preventivo
+            "Sin azúcar añadida": { icon: "no_drinks", section: "bienestar_preventivo" },
+            "Sin gluten": { icon: "bakery_dining", section: "bienestar_preventivo" },
+            "Vegano": { icon: "psychiatry", section: "bienestar_preventivo" },
+            "Vegetariano": { icon: "local_florist", section: "bienestar_preventivo" },
+            "Evitar ultraprocesados": { icon: "fastfood", section: "bienestar_preventivo" }
+        };
+
+        function normalizarTexto(texto) {
+            return (texto || '')
+                .normalize('NFKD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .trim();
+        }
+
+        const GUI_CONFIG_NORMALIZADO = Object.entries(GUI_CONFIG).reduce((acc, [nombre, config]) => {
+            acc[normalizarTexto(nombre)] = { nombre, ...config };
+            return acc;
+        }, {});
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.ready();
+                window.Telegram.WebApp.expand();
+                const user = window.Telegram.WebApp.initDataUnsafe?.user;
+                
+                if (!telegramId && user) {
+                    telegramId = String(user.id);
+                }
+                
+                if (user) {
+                    const displayName = [user.first_name, user.last_name].filter(Boolean).join(' ');
+                    document.getElementById('profile-name').textContent = displayName || 'Usuario NutriAR';
+                    document.getElementById('profile-handle').textContent = user.username ? `@${user.username}` : 'Sin username';
+                    document.getElementById('user-initial').textContent = (user.first_name || 'U').charAt(0).toUpperCase();
+
+                    if (telegramId && displayName) {
+                        await registrarUsuario(telegramId, displayName);
+                    }
+                }
+            }
+
+            if (telegramId) {
+                // Forzamos la actualización de la BD al abrir el perfil
+                await fetch(`${apiBaseUrl}/api/restricciones/reinicializar`, {
+                    method: 'POST'
+                }).catch(()=>console.log("No se requiere reinicio"));
+                await cargarPerfil();
+            } else {
+                document.getElementById('profile-subtitle').textContent = 'Abre desde Telegram';
+            }
+        });
+
+        async function registrarUsuario(telegramId, nombre) {
+            const formData = new FormData();
+            formData.append('telegram_id', telegramId);
+            formData.append('nombre', nombre);
+            await fetch(`${apiBaseUrl}/api/registrar_usuario`, {
+                method: 'POST',
+                body: formData
+            });
+        }
+
+        // Navegación
+        function goToScanner() { window.location.href = `/?telegram_id=${telegramId}`; }
+        function goToHistory() { window.location.href = `/historial?telegram_id=${telegramId}`; }
+        function goToPerfil() { window.location.href = `/perfil?telegram_id=${telegramId}`; }
+
+        async function cargarPerfil() {
+            try {
+                // 1. Cargar el catálogo total de la Base de Datos
+                const resCatalog = await fetch(`${apiBaseUrl}/api/restricciones`);
+                const dataCatalog = await resCatalog.json();
+
+                // 2. Extraer todas las restricciones crudas de la BD
+                const allCatalogRaw = [
+                    ...(dataCatalog.restricciones.condiciones_medicas || []),
+                    ...(dataCatalog.restricciones.alergias || []),
+                    ...(dataCatalog.restricciones.preferencias || [])
+                ];
+
+                // 3. Crear el array final eliminando duplicados mediante el "nombre normalizado"
+                const uniqueCatalog = [];
+                const seenNames = new Set();
+
+                allCatalogRaw.forEach(rest => {
+                    // Limpiamos la palabra "Preferencia: " y normalizamos a minúsculas
+                    let cleanName = rest.nombre.replace('Preferencia: ', '').trim();
+                    let lookupKey = normalizarTexto(cleanName);
+
+                    // Si existe en nuestro GUI_CONFIG y no lo hemos procesado aún
+                    if (GUI_CONFIG_NORMALIZADO[lookupKey] && !seenNames.has(lookupKey)) {
+                        seenNames.add(lookupKey);
+                        uniqueCatalog.push({
+                            id: rest.id,          // <--- ¡AQUÍ ESTÁ LA CLAVE! Usa el ID real de la Base de Datos
+                            nombre: GUI_CONFIG_NORMALIZADO[lookupKey].nombre,
+                            ...GUI_CONFIG_NORMALIZADO[lookupKey]
+                        });
+                    }
+                });
+
+                // 4. Obtener lo que el usuario TIENE ACTIVO en la Base de Datos
+                const resUser = await fetch(`${apiBaseUrl}/api/usuario/${telegramId}`);
+                const dataUser = await resUser.json();
+                
+                const userActiveIds = dataUser.usuario.restricciones.map(r => r.id);
+                const userActiveNames = dataUser.usuario.restricciones.map(r => r.nombre.replace('Preferencia: ', '').trim());
+
+                // Actualizar info de usuario en la Tarjeta
+                const dbName = dataUser.usuario.nombre;
+                if (dbName) {
+                    document.getElementById('profile-name').textContent = dbName;
+                    document.getElementById('user-initial').textContent = dbName.charAt(0).toUpperCase();
+                }
+
+                // Actualizar el "Status"
+                document.getElementById('profile-status').textContent = userActiveNames.length > 0 
+                    ? `Activas: ${userActiveNames.slice(0, 2).join(', ')}${userActiveNames.length > 2 ? '...' : ''}` 
+                    : 'Sin restricciones activas';
+                document.getElementById('profile-subtitle').textContent = 'Edita tus condiciones';
+
+                // 5. DIBUJAR EN PANTALLA SEGÚN LOS 2 GRUPOS EXACTOS
+                let htmlCondicionesMedicasAlergias = '';
+                let htmlBienestarPreventivo = '';
+
+                uniqueCatalog.forEach(rest => {
+                    const isActive = userActiveIds.includes(rest.id);
+                    
+                    const toggleHtml = `
+                        <button type="button" onclick="toggleRestriction(${rest.id}, this)" class="w-full flex items-center justify-between px-4 py-4 bg-white active:bg-surface-container transition-colors group">
+                            <div class="flex items-center gap-3">
+                                <span class="material-symbols-outlined text-[24px] ${isActive ? 'text-primary' : 'text-outline-variant group-hover:text-on-surface-variant transition-colors'}">${rest.icon}</span>
+                                <span class="font-medium text-[14px] ${isActive ? 'text-on-surface' : 'text-on-surface-variant'}">${rest.nombre}</span>
+                            </div>
+                            
+                            <!-- Toggle (Switch) de Tailwind -->
+                            <div class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ease-in-out ${isActive ? 'bg-primary' : 'bg-surface-dim'}">
+                                <span class="inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-300 ease-in-out ${isActive ? 'translate-x-5' : 'translate-x-1'}"></span>
+                            </div>
+                        </button>
+                    `;
+
+                    // Repartir el HTML en el grupo correcto
+                    if (rest.section === 'condiciones_medicas_alergias') {
+                        htmlCondicionesMedicasAlergias += toggleHtml;
+                    } else if (rest.section === 'bienestar_preventivo') {
+                        htmlBienestarPreventivo += toggleHtml;
+                    }
+                });
+
+                // Inyectar en el DOM
+                document.getElementById('condiciones_medicas_alergias-section').innerHTML = htmlCondicionesMedicasAlergias || '<div class="p-4 text-center text-sm text-outline">Error: Base de datos vacía</div>';
+                document.getElementById('bienestar_preventivo-section').innerHTML = htmlBienestarPreventivo || '<div class="p-4 text-center text-sm text-outline">Error: Base de datos vacía</div>';
+
+            } catch (err) {
+                console.error('Error cargando perfil:', err);
+                document.getElementById('profile-status').textContent = 'Error de conexión';
+            }
+        }
+
+        async function toggleRestriction(restriccionId, buttonElement) {
+            buttonElement.style.pointerEvents = 'none'; // Prevenir doble clic o rebotes
+
+            try {
+                // Enviar el ID real numérico a FastAPI
+                const response = await fetch(`${apiBaseUrl}/api/usuario/${telegramId}/restricciones`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ restriccion_id: restriccionId })
+                });
+
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    // Refrescar el perfil de inmediato para que el switch cambie a azul
+                    await cargarPerfil();
+                } else {
+                    alert(data.error || 'No se pudo actualizar en la base de datos');
+                }
+            } catch (err) {
+                console.error('Error:', err);
+                alert('Fallo de conexión al guardar.');
+            } finally {
+                buttonElement.style.pointerEvents = 'auto'; // Reactivar botón
+            }
+        }
+    </script>
+</body>
+</html>

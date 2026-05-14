@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html class="light" lang="es">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+    <title>NutriAR - Escanear Etiqueta</title>
+    
+    <!-- LÓGICA BASE: Telegram y CSS Custom -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="/static/styles.css">
+
+    <!-- DISEÑO: Tailwind y Fuentes (Del Mockup) -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    
+    <!-- Configuración Tailwind del Mockup -->
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#005f9e",
+                        "primary-fixed": "#d1e4ff",
+                        "secondary": "#006e28",
+                        "secondary-fixed-dim": "#53e16f",
+                        "background": "#f9f9f9",
+                        "on-surface": "#1a1c1c",
+                        "on-surface-variant": "#404751",
+                        "surface-bright": "#f9f9f9",
+                        "inverse-surface": "#2f3131",
+                        "outline-variant": "#c0c7d3"
+                    },
+                    fontFamily: {
+                        body: ["Inter"]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+<body class="bg-background text-on-surface font-body selection:bg-primary-fixed overflow-hidden h-screen w-full flex flex-col">
+    
+    <!-- Telegram Mini App Header  -->
+    <header class="w-full top-0 sticky z-50 bg-white dark:bg-[#1a1c1c] border-b border-outline-variant/30">
+        <div class="flex items-center justify-between px-4 py-3 w-full">
+            <div class="flex items-center gap-3">
+                <div class="flex flex-col">
+                    <h1 class="font-bold text-[16px] leading-tight text-on-surface">NutriAR</h1>
+                    <span id="status-pill" class="text-[12px] text-primary font-medium">Iniciando cámara...</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area: Camera Viewport -->
+    <main class="flex-grow relative overflow-hidden bg-black">
+        
+        <!-- CORRECCIÓN iOS: Video de la cámara con atributos playsinline obligatorios -->
+        <video id="camera-feed" autoplay playsinline muted style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: cover; z-index: 0;"></video>
+        
+        <!-- Scanning Overlay Layout -->
+        <div class="absolute inset-0 z-10 flex flex-col pointer-events-none">
+            <!-- Top Shade -->
+            <div class="h-[15%] scanner-overlay w-full flex items-end justify-center pb-4">
+                <!-- Instruction Tooltip  -->
+                <div id="instruction-tooltip" class="bg-inverse-surface/85 backdrop-blur-md px-5 py-3 rounded-2xl flex items-center gap-3 border border-outline-variant/20 shadow-2xl pointer-events-auto transition-opacity duration-300">
+                    <span class="material-symbols-outlined text-surface-bright text-xl">info</span>
+                    <p class="text-surface-bright text-[0.875rem] font-semibold tracking-tight leading-none">Enfoca la lista de ingredientes</p>
+                </div>
+            </div>
+
+            <!-- Reducimos el alto de 55% a 50% para subir el cuadro -->
+            <div class="flex flex-row h-[50%]">
+                <div class="w-[8%] scanner-overlay h-full"></div>
+                
+                <!-- Central Viewfinder Area -->
+                <div class="w-[84%] relative">
+                    <div class="viewfinder-corner top-0 left-0 border-t-[3px] border-l-[3px] border-white rounded-tl-2xl"></div>
+                    <div class="viewfinder-corner top-0 right-0 border-t-[3px] border-r-[3px] border-white rounded-tr-2xl"></div>
+                    <div class="viewfinder-corner bottom-0 left-0 border-b-[3px] border-l-[3px] border-white rounded-bl-2xl"></div>
+                    <div class="viewfinder-corner bottom-0 right-0 border-b-[3px] border-r-[3px] border-white rounded-br-2xl"></div>
+                    
+                    <!-- Animated Scan Line -->
+                    <div class="scan-line absolute left-2 right-2 h-[2px] bg-primary shadow-[0_0_15px_rgba(0,95,158,0.8)] z-20"></div>
+                </div>
+                
+                <div class="w-[8%] scanner-overlay h-full"></div>
+            </div>
+            
+            <!-- Bottom Shade & Controls -->
+            <div class="flex-grow scanner-overlay w-full relative flex flex-col justify-center items-center">
+                
+                <!-- Interaction Controls moved to top -->
+                <div class="absolute top-5 left-0 right-0 flex justify-between items-center px-10 pointer-events-auto">
+                    
+                    <!-- LADO IZQUIERDO: LINTERNA -->
+                    <div class="w-16 flex justify-start">
+                        <button id="flashlight-btn" onclick="toggleFlashlight()" class="w-12 h-12 rounded-full bg-black/40 border border-white/20 backdrop-blur-md flex items-center justify-center text-white active:scale-90 transition-all">
+                            <span id="flash-icon" class="material-symbols-outlined text-[24px]">flashlight_on</span>
+                        </button>
+                    </div>
+                    
+                    <!-- CENTRO PERFECTO: BOTÓN CAPTURAR -->
+                    <div class="relative group flex justify-center">
+                        <div class="absolute -inset-2 border-2 border-white/30 rounded-full"></div>
+                        <button id="scan-button" onclick="startScan()" class="relative w-20 h-20 rounded-full border-4 border-white bg-white/20 backdrop-blur-sm flex items-center justify-center p-1.5 active:scale-95 transition-all shadow-2xl">
+                            <div class="w-full h-full rounded-full bg-white flex items-center justify-center">
+                                <span class="material-symbols-outlined text-primary text-[32px]">photo_camera</span>
+                            </div>
+                        </button>
+                    </div>
+
+                    <!-- LADO DERECHO: FANTASMA (Para equilibrar y centrar la cámara) -->
+                    <div class="w-16"></div>
+                    
+                </div>
+            </div>
+        </div>
+
+        <!-- ESTADO DE CARGA DINÁMICO -->
+        <div id="loading-container" class="loading-state absolute top-[35%] left-1/2 -translate-x-1/2 z-30">
+            <div class="bg-primary/95 backdrop-blur-lg px-5 py-2.5 rounded-full border border-white/30 shadow-2xl flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-white animate-pulse"></span>
+                <!-- El ID loading-message es inyectado por el JavaScript -->
+                <span id="loading-message" class="text-white text-[0.70rem] font-black uppercase tracking-[0.15em] whitespace-nowrap">Captura de imagen...</span>
+            </div>
+        </div>
+
+        <!-- TARJETA AR (GLASS-PANEL MOCKUP) -->
+        <div id="ar-card" class="result-card absolute bottom-4 left-4 right-4 z-40">
+            <div id="card-glow" class="glass-panel rounded-[2rem] p-6 text-white border border-white/10 flex flex-col gap-4">
+                
+                <!-- Status Row -->
+                <div class="flex justify-between items-start">
+                    <div class="flex flex-col gap-1">
+                        <span class="uppercase tracking-wider text-white/60 font-semibold text-[10px]">Análisis de Nutrientes</span>
+                        <h2 id="card-title" class="text-2xl font-extrabold tracking-tight"></h2>
+                    </div>
+                    <!-- El JS le inyectará bg-red-600 o bg-green-600 aquí -->
+                    <div id="card-badge" class="px-3 py-1 rounded-full flex items-center gap-1.5">
+                        <span id="badge-icon" class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;"></span>
+                        <span id="badge-text" class="text-[10px] font-bold uppercase tracking-widest"></span>
+                    </div>
+                </div>
+
+                <!-- Alert Details -->
+                <div class="flex flex-col gap-3">
+                    <!-- El JS inyectará bg-red-500/20 o bg-green-500/20 aquí -->
+                    <div id="msg-container" class="flex items-start gap-3 p-3 rounded-xl border">
+                        <span id="msg-icon" class="material-symbols-outlined"></span>
+                        <p id="risk-text" class="text-sm font-medium leading-relaxed"></p>
+                    </div>
+
+                    <!-- Contenedor Dinámico para Ingredientes (Chips rojos) -->
+                    <div id="allergens-container" class="flex flex-wrap gap-2 mt-1">
+                        <!-- El app.js inyectará aquí los cuadritos rojos -->
+                    </div>
+                </div>
+
+                <!-- Main Action - Contenedor Dinámico de Botones -->
+                <div id="action-buttons-container" class="flex gap-2">
+                    <button id="retry-button" onclick="retryLastAnalysis()" class="flex-1 bg-blue-600/80 hover:bg-blue-700 py-4 rounded-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg border border-blue-500/50" style="display: none;">
+                        <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">refresh</span>
+                        <span class="text-sm font-bold uppercase tracking-widest">REINTENTAR</span>
+                    </button>
+                    <button id="rescan-button" onclick="restartScan()" class="flex-1 bg-white/20 hover:bg-white/30 py-4 rounded-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg border border-white/20">
+                        <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">filter_center_focus</span>
+                        <span class="text-sm font-bold uppercase tracking-widest">RE-ESCANEAR</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- BottomNavBar -->
+    <nav class="fixed bottom-0 left-0 w-full z-50 bg-[#f9f9f9] shadow-[0_-4px_24px_rgba(0,0,0,0.05)] border-t border-outline-variant/20">
+        <div class="flex justify-around items-center h-16 px-4 pb-2 w-full">
+            <button onclick="goToScanner()" class="flex flex-col items-center justify-center text-primary font-bold px-4 py-1 active:scale-95">
+                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">barcode_scanner</span>
+                <span class="text-[10px] font-bold tracking-wider uppercase mt-0.5">Escanear</span>
+            </button>
+            <button onclick="goToHistory()" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors px-4 py-1 active:scale-95">
+                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">history</span>
+                <span class="text-[10px] font-bold tracking-wider uppercase mt-0.5">Historial</span>
+            </button>
+            <button onclick="goToPerfil()" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors px-4 py-1 active:scale-95">
+                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">person</span>
+                <span class="text-[10px] font-bold tracking-wider uppercase mt-0.5">Perfil</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Canvas oculto y archivo JavaScript -->
+    <canvas id="capture-canvas" class="hidden"></canvas>
+    <script src="/static/app.js"></script>
+</body>
+</html>

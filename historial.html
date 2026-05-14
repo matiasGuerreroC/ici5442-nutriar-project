@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NutriAR - Historial de Análisis</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .historial-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .analisis-card {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-left: 5px solid #ddd;
+            transition: all 0.3s ease;
+        }
+
+        .analisis-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .analisis-card.apto {
+            border-left-color: #4caf50;
+        }
+
+        .analisis-card.no-apto {
+            border-left-color: #ff6b6b;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .status-badge.apto {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .status-badge.no-apto {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .analisis-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .analisis-title {
+            font-weight: bold;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .analisis-fecha {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .analisis-razon {
+            color: #666;
+            font-size: 14px;
+            margin-top: 10px;
+            line-height: 1.4;
+        }
+
+        .ingredientes {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-size: 13px;
+        }
+
+        .ingredientes-title {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .ingredientes-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+
+        .ingrediente-tag {
+            background: #ff6b6b;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 15px;
+            font-size: 12px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px 20px;
+            color: white;
+            font-size: 18px;
+        }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .empty {
+            background: white;
+            padding: 40px 20px;
+            border-radius: 12px;
+            text-align: center;
+            color: #999;
+        }
+
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+
+        .botones {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .boton {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .boton-primario {
+            background: #667eea;
+            color: white;
+        }
+
+        .boton-primario:hover {
+            background: #764ba2;
+        }
+
+        .boton-secundario {
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .boton-secundario:hover {
+            background: #d0d0d0;
+        }
+
+        .filtro-container {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .filtro-btn {
+            padding: 8px 16px;
+            border: 2px solid #ddd;
+            background: white;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s ease;
+        }
+
+        .filtro-btn.activo {
+            border-color: #667eea;
+            background: #667eea;
+            color: white;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Historial de Análisis</h1>
+            <p>Tus últimos escaneos de productos</p>
+        </div>
+
+        <div class="stats" id="statsContainer">
+            <div class="stat-card">
+                <div class="stat-number" id="totalAnalisis">0</div>
+                <div class="stat-label">Total análisis</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="aptosCount">0</div>
+                <div class="stat-label">Productos aptos</div>
+            </div>
+        </div>
+
+        <div class="filtro-container">
+            <button class="filtro-btn activo" onclick="filtrar('todos')">Todos</button>
+            <button class="filtro-btn" onclick="filtrar('apto')">✅ Aptos</button>
+            <button class="filtro-btn" onclick="filtrar('no-apto')">🛑 No Aptos</button>
+        </div>
+
+        <div id="historialContent">
+            <div class="loading">⏳ Cargando historial...</div>
+        </div>
+
+        <div class="botones">
+            <button class="boton boton-primario" onclick="refrescar()">🔄 Refrescar</button>
+            <button class="boton boton-secundario" onclick="irAlEscaner()">🚀 Ir al Escáner</button>
+        </div>
+    </div>
+
+    <script>
+        let telegramId = null;
+        let historialCompleto = [];
+        let filtroActual = 'todos';
+
+        // Obtener telegram_id de la URL
+        function obtenerTelegramId() {
+            const params = new URLSearchParams(window.location.search);
+            telegramId = params.get('telegram_id');
+            
+            if (!telegramId) {
+                // Intentar obtener de Telegram WebApp
+                if (window.Telegram && window.Telegram.WebApp) {
+                    telegramId = window.Telegram.WebApp.initDataUnsafe?.user?.id?.toString();
+                }
+            }
+
+            if (telegramId) {
+                cargarHistorial();
+            } else {
+                mostrarError('No se pudo identificar tu ID de Telegram');
+            }
+        }
+
+        async function cargarHistorial() {
+            try {
+                const response = await fetch(`/api/historial/${telegramId}`);
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    historialCompleto = data.historial;
+                    actualizarEstadisticas();
+                    mostrarHistorial();
+                } else {
+                    mostrarError(data.error || 'No se pudo cargar el historial');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                mostrarError('Error al conectar con el servidor');
+            }
+        }
+
+        function actualizarEstadisticas() {
+            const total = historialCompleto.length;
+            const aptos = historialCompleto.filter(a => a.es_apto).length;
+
+            document.getElementById('totalAnalisis').textContent = total;
+            document.getElementById('aptosCount').textContent = aptos;
+        }
+
+        function mostrarHistorial() {
+            const filtrados = historialCompleto.filter(item => {
+                if (filtroActual === 'apto') return item.es_apto;
+                if (filtroActual === 'no-apto') return !item.es_apto;
+                return true;
+            });
+
+            if (filtrados.length === 0) {
+                document.getElementById('historialContent').innerHTML = `
+                    <div class="empty">
+                        <div class="empty-icon">📭</div>
+                        <div>No hay análisis registrados</div>
+                        <div style="font-size: 12px; margin-top: 10px;">Comienza a escanear productos</div>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '<div class="historial-container">';
+
+            filtrados.forEach(analisis => {
+                const fecha = new Date(analisis.fecha_hora_escaneo);
+                const fechaFormato = fecha.toLocaleDateString('es-AR', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                const estatus = analisis.es_apto ? 'apto' : 'no-apto';
+                const badge = analisis.es_apto ? '✅ Apto' : '🛑 No Apto';
+
+                html += `
+                    <div class="analisis-card ${estatus}">
+                        <div class="status-badge ${estatus}">${badge}</div>
+                        <div class="analisis-header">
+                            <div class="analisis-title">${escapeHtml(analisis.desc_breve_producto)}</div>
+                            <div class="analisis-fecha">${fechaFormato}</div>
+                        </div>
+                `;
+
+                if (!analisis.es_apto && analisis.razon_alerta) {
+                    html += `<div class="analisis-razon">📝 ${escapeHtml(analisis.razon_alerta)}</div>`;
+                }
+
+                if (!analisis.es_apto && analisis.ingredientes_peligrosos && analisis.ingredientes_peligrosos.length > 0) {
+                    html += `
+                        <div class="ingredientes">
+                            <div class="ingredientes-title">⚠️ Ingredientes peligrosos:</div>
+                            <div class="ingredientes-list">
+                                ${analisis.ingredientes_peligrosos.map(ing => 
+                                    `<div class="ingrediente-tag">${escapeHtml(ing)}</div>`
+                                ).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                html += '</div>';
+            });
+
+            html += '</div>';
+            document.getElementById('historialContent').innerHTML = html;
+        }
+
+        function filtrar(tipo) {
+            filtroActual = tipo;
+
+            // Actualizar botones
+            document.querySelectorAll('.filtro-btn').forEach(btn => {
+                btn.classList.remove('activo');
+            });
+            event.target.classList.add('activo');
+
+            mostrarHistorial();
+        }
+
+        function mostrarError(mensaje) {
+            document.getElementById('historialContent').innerHTML = `
+                <div class="error">❌ ${escapeHtml(mensaje)}</div>
+            `;
+        }
+
+        function refrescar() {
+            document.getElementById('historialContent').innerHTML = '<div class="loading">⏳ Cargando...</div>';
+            cargarHistorial();
+        }
+
+        function irAlEscaner() {
+            window.location.href = `/?telegram_id=${telegramId}`;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Inicializar cuando carga la página
+        document.addEventListener('DOMContentLoaded', obtenerTelegramId);
+    </script>
+</body>
+</html>
