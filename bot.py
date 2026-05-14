@@ -3,6 +3,7 @@ import json
 import os
 import socket
 import threading
+import unicodedata
 import requests
 from datetime import datetime
 from html import escape
@@ -83,33 +84,46 @@ RESTRICCIONES_PREDEFINIDAS = {
     "vegano": {"nombre": "Vegano", "tipo": "preferencia"},
     "vegetariano": {"nombre": "Vegetariano", "tipo": "preferencia"},
     "ultraprocesados": {"nombre": "Evitar ultraprocesados", "tipo": "preferencia"},
+    "hipertension": {"nombre": "Hipertensión", "tipo": "condicion_medica"},
+    "resistencia_insulina": {"nombre": "Resistencia a la Insulina", "tipo": "condicion_medica"},
 }
 
-LEGACY_RESTRICCIONES = {
-    "sin_azucar": "Preferencia: Sin Azúcar Añadida",
-    "sin_gluten": "Preferencia: Sin Gluten",
-    "vegano": "Preferencia: Vegano",
-    "vegetariano": "Preferencia: Vegetariano",
-}
+def normalizar_texto(texto: str) -> str:
+    """Normaliza texto para comparar nombres de restricciones sin depender de tildes o mayúsculas."""
+    texto = texto or ""
+    texto = unicodedata.normalize("NFKD", texto)
+    texto = "".join(ch for ch in texto if not unicodedata.combining(ch))
+    return texto.lower().strip()
 
 
 def inicializar_restricciones():
     """Crea las restricciones predefinidas en la BD forzando la escritura si no existen"""
     db = SessionLocal()
     try:
+        existentes = db.query(Restriccion).all()
+        existentes_por_normalizado = {
+            normalizar_texto(restriccion.nombre): restriccion
+            for restriccion in existentes
+        }
+
         for key, restriccion in RESTRICCIONES_PREDEFINIDAS.items():
-            # Buscamos ignorando mayúsculas para evitar duplicados falsos
-            existe = db.query(Restriccion).filter(
-                Restriccion.nombre.ilike(restriccion["nombre"])
-            ).first()
-            
-            if not existe:
+            clave_normalizada = normalizar_texto(restriccion["nombre"])
+            existe = existentes_por_normalizado.get(clave_normalizada)
+
+            if existe:
+                if existe.nombre != restriccion["nombre"] or existe.tipo != restriccion["tipo"]:
+                    existe.nombre = restriccion["nombre"]
+                    existe.tipo = restriccion["tipo"]
+            else:
                 print(f"[BD] Insertando restricción faltante: {restriccion['nombre']}")
+                id = len(existentes_por_normalizado) + 1
                 nueva = Restriccion(
+                    id=id,
                     nombre=restriccion["nombre"],
                     tipo=restriccion["tipo"]
                 )
                 db.add(nueva)
+                existentes_por_normalizado[clave_normalizada] = nueva
         db.commit()
     except Exception as e:
         print(f"[ERROR CRÍTICO BD] No se pudieron inicializar restricciones: {e}")
@@ -126,7 +140,8 @@ def obtener_o_crear_usuario(telegram_id: str, nombre: str = None):
         if not usuario:
             final_name = nombre or f"Telegram {telegram_id}"
             print(f"[{datetime.now().strftime('%H:%M:%S')}] 👤 Registrando nuevo usuario: {final_name}")
-            usuario = Usuario(telegram_id=str(telegram_id), nombre=final_name)
+            id = db.query(Usuario).count() + 1 
+            usuario = Usuario(id=id, telegram_id=str(telegram_id), nombre=final_name)
             db.add(usuario)
             db.commit()
             db.refresh(usuario)
@@ -363,6 +378,7 @@ async def obtener_historial(telegram_id: str):
 @app.get("/api/restricciones")
 async def obtener_restricciones():
     """Obtiene todas las restricciones disponibles agrupadas por tipo"""
+    inicializar_restricciones()
     db = SessionLocal()
     try:
         restricciones = db.query(Restriccion).all()
@@ -383,6 +399,16 @@ async def obtener_restricciones():
         return {"status": "success", "restricciones": agrupadas}
     finally:
         db.close()
+
+
+@app.post("/api/restricciones/reinicializar")
+async def reinicializar_restricciones():
+    """Reinicializa todas las restricciones predefinidas en la BD"""
+    try:
+        inicializar_restricciones()
+        return {"status": "success", "message": "Restricciones reinicializadas correctamente"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
 
 
 @app.get("/api/usuario/{telegram_id}")

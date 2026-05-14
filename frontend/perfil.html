@@ -152,24 +152,39 @@
         // MAPEO EXACTO: Qué icono lleva cada restricción y a qué grupo pertenece
         const GUI_CONFIG = {
             // GRUPO 1: Condiciones Médicas y Alergias
-            "celiaquía": { icon: "grass", section: "condiciones_medicas_alergias" },
-            "diabetes tipo 2": { icon: "bloodtype", section: "condiciones_medicas_alergias" },
-            "intolerancia a la lactosa": { icon: "water_drop", section: "condiciones_medicas_alergias" },
-            "alergia a lácteos": { icon: "icecream", section: "condiciones_medicas_alergias" },
-            "alergia a soya": { icon: "eco", section: "condiciones_medicas_alergias" },
-            "alergia a maní": { icon: "grain", section: "condiciones_medicas_alergias" },
-            "alergia a mariscos": { icon: "set_meal", section: "condiciones_medicas_alergias" },
-            "alergia a pescado": { icon: "phishing", section: "condiciones_medicas_alergias" },
-            "alergia a huevo": { icon: "egg_alt", section: "condiciones_medicas_alergias" },
-            "alergia a frutos secos": { icon: "forest", section: "condiciones_medicas_alergias" },
+            "Hipertensión": { icon: "health_and_safety", section: "condiciones_medicas_alergias" },
+            "Resistencia a la Insulina": { icon: "insights", section: "condiciones_medicas_alergias" },
+            "Celiaquía": { icon: "grass", section: "condiciones_medicas_alergias" },
+            "Diabetes tipo 2": { icon: "bloodtype", section: "condiciones_medicas_alergias" },
+            "Intolerancia a la lactosa": { icon: "water_drop", section: "condiciones_medicas_alergias" },
+            "Alergia a lácteos": { icon: "icecream", section: "condiciones_medicas_alergias" },
+            "Alergia a soya": { icon: "eco", section: "condiciones_medicas_alergias" },
+            "Alergia a maní": { icon: "grain", section: "condiciones_medicas_alergias" },
+            "Alergia a mariscos": { icon: "set_meal", section: "condiciones_medicas_alergias" },
+            "Alergia a pescado": { icon: "phishing", section: "condiciones_medicas_alergias" },
+            "Alergia a huevo": { icon: "egg_alt", section: "condiciones_medicas_alergias" },
+            "Alergia a frutos secos": { icon: "forest", section: "condiciones_medicas_alergias" },
             
             // GRUPO 2: Bienestar Preventivo
-            "sin azúcar añadida": { icon: "no_drinks", section: "bienestar_preventivo" },
-            "sin gluten": { icon: "bakery_dining", section: "bienestar_preventivo" },
-            "vegano": { icon: "psychiatry", section: "bienestar_preventivo" },
-            "vegetariano": { icon: "local_florist", section: "bienestar_preventivo" },
-            "evitar ultraprocesados": { icon: "fastfood", section: "bienestar_preventivo" }
+            "Sin azúcar añadida": { icon: "no_drinks", section: "bienestar_preventivo" },
+            "Sin gluten": { icon: "bakery_dining", section: "bienestar_preventivo" },
+            "Vegano": { icon: "psychiatry", section: "bienestar_preventivo" },
+            "Vegetariano": { icon: "local_florist", section: "bienestar_preventivo" },
+            "Evitar ultraprocesados": { icon: "fastfood", section: "bienestar_preventivo" }
         };
+
+        function normalizarTexto(texto) {
+            return (texto || '')
+                .normalize('NFKD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .trim();
+        }
+
+        const GUI_CONFIG_NORMALIZADO = Object.entries(GUI_CONFIG).reduce((acc, [nombre, config]) => {
+            acc[normalizarTexto(nombre)] = { nombre, ...config };
+            return acc;
+        }, {});
 
         document.addEventListener('DOMContentLoaded', async () => {
             if (window.Telegram && window.Telegram.WebApp) {
@@ -195,7 +210,9 @@
 
             if (telegramId) {
                 // Forzamos la actualización de la BD al abrir el perfil
-                await fetch(`${apiBaseUrl}/api/restricciones/reinicializar`).catch(()=>console.log("No se requiere reinicio"));
+                await fetch(`${apiBaseUrl}/api/restricciones/reinicializar`, {
+                    method: 'POST'
+                }).catch(()=>console.log("No se requiere reinicio"));
                 await cargarPerfil();
             } else {
                 document.getElementById('profile-subtitle').textContent = 'Abre desde Telegram';
@@ -237,15 +254,15 @@
                 allCatalogRaw.forEach(rest => {
                     // Limpiamos la palabra "Preferencia: " y normalizamos a minúsculas
                     let cleanName = rest.nombre.replace('Preferencia: ', '').trim();
-                    let lookupKey = cleanName.toLowerCase();
+                    let lookupKey = normalizarTexto(cleanName);
 
                     // Si existe en nuestro GUI_CONFIG y no lo hemos procesado aún
-                    if (GUI_CONFIG[lookupKey] && !seenNames.has(lookupKey)) {
+                    if (GUI_CONFIG_NORMALIZADO[lookupKey] && !seenNames.has(lookupKey)) {
                         seenNames.add(lookupKey);
                         uniqueCatalog.push({
                             id: rest.id,          // <--- ¡AQUÍ ESTÁ LA CLAVE! Usa el ID real de la Base de Datos
-                            nombre: cleanName,
-                            ...GUI_CONFIG[lookupKey]
+                            nombre: GUI_CONFIG_NORMALIZADO[lookupKey].nombre,
+                            ...GUI_CONFIG_NORMALIZADO[lookupKey]
                         });
                     }
                 });
