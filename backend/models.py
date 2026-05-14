@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Table, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Table, DateTime, Text
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from sqlalchemy.orm import relationship
 import datetime
@@ -40,6 +40,7 @@ class HistorialProducto(Base):
     es_apto = Column(Boolean)
     ingredientes_peligrosos = Column(ARRAY(String)) # Exclusivo de Postgres
     razon_alerta = Column(String)
+    imagen_base64 = Column(Text)
     respuesta_json_llm = Column(JSONB)              # Exclusivo de Postgres
     
     usuario = relationship("Usuario", back_populates="historial")
