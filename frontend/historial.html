@@ -173,6 +173,58 @@
             }
         }
 
+        async function editarNombre(historialId, nombreCodificado) {
+            const nombreActual = decodeURIComponent(nombreCodificado || '');
+            const nuevoNombre = prompt('Editar nombre del producto:', nombreActual);
+
+            if (nuevoNombre === null) return;
+            if (!nuevoNombre.trim()) {
+                alert('El nombre no puede estar vacío.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${apiBaseUrl}/api/historial/${telegramId}/${historialId}/nombre`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ desc_breve_producto: nuevoNombre.trim() })
+                });
+                const data = await response.json();
+
+                if (data.status !== 'success') {
+                    throw new Error(data.error || 'No se pudo actualizar el nombre.');
+                }
+
+                await cargarHistorial();
+            } catch (err) {
+                console.error('Error actualizando nombre:', err);
+                alert(err.message || 'Error al actualizar el nombre.');
+            }
+        }
+
+        async function eliminarRegistro(historialId) {
+            const confirmado = confirm('¿Eliminar este registro del historial? Esta acción no se puede deshacer.');
+            if (!confirmado) return;
+
+            try {
+                const response = await fetch(`${apiBaseUrl}/api/historial/${telegramId}/${historialId}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+
+                if (data.status !== 'success') {
+                    throw new Error(data.error || 'No se pudo eliminar el registro.');
+                }
+
+                await cargarHistorial();
+            } catch (err) {
+                console.error('Error eliminando registro:', err);
+                alert(err.message || 'Error al eliminar el registro.');
+            }
+        }
+
         function renderizarHistorial(historial, total) {
             // Actualizar la tarjeta de Resumen (Bento Box)
             document.getElementById('total-productos').textContent = total;
@@ -193,7 +245,6 @@
 
             historial.forEach(item => {
                 const date = new Date(item.fecha_hora_escaneo);
-                const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 const dateStr = date.toLocaleDateString([], { day: '2-digit', month: 'short' });
 
                 // Crear los chips de riesgo si no es apto
@@ -220,7 +271,7 @@
                     <div class="flex-grow min-w-0">
                         <div class="flex justify-between items-start">
                             <h3 class="font-bold text-on-surface truncate text-sm">${item.desc_breve_producto}</h3>
-                            <span class="text-[10px] text-outline font-medium whitespace-nowrap ml-2">${dateStr} ${timeStr}</span>
+                            <span class="text-[10px] text-outline font-medium whitespace-nowrap ml-2">${dateStr}</span>
                         </div>
                         <div class="mt-1 flex items-center gap-2 overflow-hidden">
                             ${item.es_apto 
@@ -228,6 +279,16 @@
                                 : `<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-error-container text-on-error-container text-[10px] font-bold uppercase tracking-wider shrink-0">No Apto</span>`
                             }
                             ${chipsHtml}
+                        </div>
+                        <div class="mt-2 flex items-center justify-end gap-4">
+                            <button onclick="editarNombre(${item.id}, '${encodeURIComponent(item.desc_breve_producto || '')}')" class="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:opacity-80 transition-opacity">
+                                <span class="material-symbols-outlined text-sm">edit</span>
+                                Editar nombre
+                            </button>
+                            <button onclick="eliminarRegistro(${item.id})" class="inline-flex items-center gap-1 text-[11px] font-semibold text-error hover:opacity-80 transition-opacity">
+                                <span class="material-symbols-outlined text-sm">delete</span>
+                                Eliminar
+                            </button>
                         </div>
                     </div>
                 </div>`;

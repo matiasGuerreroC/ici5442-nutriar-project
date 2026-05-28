@@ -194,12 +194,25 @@ def obtener_prompt_sistema(usuario: Usuario):
     
     DEBES responder ÚNICAMENTE en formato JSON con la siguiente estructura exacta:
     {{
+        "nombre_producto": "Nombre corto y claro del producto (ej: Leche Descremada, Cereal Integral, Chocolate 70%)",
         "analisis_paso_a_paso": "Escribe aquí tu razonamiento detallado evaluando los ingredientes frente a las restricciones ANTES de dar el veredicto.",
         "es_apto": booleano,
         "ingredientes_peligrosos": ["lista", "de", "ingredientes", "que", "hacen", "daño"],
         "razon": "Explicación breve de por qué es o no es apto"
     }}
     """
+
+
+def obtener_nombre_producto(datos: dict, fuente: str) -> str:
+    """Obtiene el nombre de producto desde la respuesta del LLM con fallback seguro."""
+    nombre = (datos or {}).get("nombre_producto")
+    if isinstance(nombre, str):
+        nombre = nombre.strip()
+        if nombre:
+            return nombre[:120]
+
+    # Compatibilidad para escaneos antiguos o respuestas incompletas del modelo.
+    return f"Producto escaneado ({fuente})"
 
 def procesar_imagen_para_groq(image_bytes):
     """
@@ -392,6 +405,75 @@ async def obtener_historial(telegram_id: str):
         db.close()
 
 
+@app.put("/api/historial/{telegram_id}/{historial_id}/nombre")
+async def actualizar_nombre_historial(telegram_id: str, historial_id: int, payload: dict = Body(...)):
+    """Permite editar el nombre breve de un registro del historial."""
+    db = SessionLocal()
+    try:
+        nuevo_nombre = (payload.get("desc_breve_producto") or "").strip()
+        if not nuevo_nombre:
+            return {"status": "error", "error": "El nombre no puede estar vacío", "codigo": 400}
+
+        usuario = db.query(Usuario).filter(Usuario.telegram_id == str(telegram_id)).first()
+        if not usuario:
+            return {"status": "error", "error": "Usuario no encontrado", "codigo": 404}
+
+        item = db.query(HistorialProducto).filter(
+            HistorialProducto.id == historial_id,
+            HistorialProducto.usuario_id == usuario.id
+        ).first()
+        if not item:
+            return {"status": "error", "error": "Registro no encontrado", "codigo": 404}
+
+        item.desc_breve_producto = nuevo_nombre[:120]
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": "Nombre actualizado",
+            "registro": {
+                "id": item.id,
+                "desc_breve_producto": item.desc_breve_producto
+            }
+        }
+    except Exception as e:
+        print(f"[ERROR] {e}")
+        return {"status": "error", "error": str(e), "codigo": 500}
+    finally:
+        db.close()
+
+
+@app.delete("/api/historial/{telegram_id}/{historial_id}")
+async def eliminar_registro_historial(telegram_id: str, historial_id: int):
+    """Elimina un registro de historial perteneciente al usuario."""
+    db = SessionLocal()
+    try:
+        usuario = db.query(Usuario).filter(Usuario.telegram_id == str(telegram_id)).first()
+        if not usuario:
+            return {"status": "error", "error": "Usuario no encontrado", "codigo": 404}
+
+        item = db.query(HistorialProducto).filter(
+            HistorialProducto.id == historial_id,
+            HistorialProducto.usuario_id == usuario.id
+        ).first()
+        if not item:
+            return {"status": "error", "error": "Registro no encontrado", "codigo": 404}
+
+        db.delete(item)
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": "Registro eliminado",
+            "registro_id": historial_id
+        }
+    except Exception as e:
+        print(f"[ERROR] {e}")
+        return {"status": "error", "error": str(e), "codigo": 500}
+    finally:
+        db.close()
+
+
 @app.get("/api/restricciones")
 async def obtener_restricciones():
     """Obtiene todas las restricciones disponibles agrupadas por tipo"""
@@ -541,7 +623,7 @@ async def analizar_desde_web(image: UploadFile = File(None), image_base64: str =
         nuevo_historial = HistorialProducto(
             id=id,
             usuario_id=usuario.id,
-            desc_breve_producto="Escaneo desde WebApp",
+            desc_breve_producto=obtener_nombre_producto(datos, "WebApp"),
             es_apto=datos.get("es_apto", False),
             ingredientes_peligrosos=datos.get("ingredientes_peligrosos",[]),
             razon_alerta=datos.get("razon", ""),
@@ -730,7 +812,7 @@ def analizar_etiqueta(message):
         nuevo_historial = HistorialProducto(
             id=id,
             usuario_id=usuario.id,
-            desc_breve_producto="Escaneo desde Telegram",
+            desc_breve_producto=obtener_nombre_producto(datos, "Telegram"),
             es_apto=datos.get("es_apto", False),
             ingredientes_peligrosos=datos.get("ingredientes_peligrosos", []),
             razon_alerta=datos.get("razon", ""),
