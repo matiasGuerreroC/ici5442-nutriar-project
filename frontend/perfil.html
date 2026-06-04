@@ -142,6 +142,21 @@
         </div>
     </nav>
 
+    <div id="feedback-modal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/35 px-4" role="dialog" aria-modal="true" aria-labelledby="feedback-modal-title">
+        <div class="w-full max-w-sm rounded-[28px] bg-white p-6 text-center shadow-[0_24px_80px_rgba(0,0,0,0.18)] border border-black/5">
+            <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <span id="feedback-modal-icon" class="material-symbols-outlined text-4xl" style="font-variation-settings: 'FILL' 1;">settings</span>
+            </div>
+            <h2 id="feedback-modal-title" class="text-lg font-extrabold text-on-surface">Configuración Pendiente</h2>
+            <p id="feedback-modal-message" class="mt-2 text-sm leading-6 text-on-surface-variant">
+                Primero debes terminar de configurar tu perfil para usar esta opción.
+            </p>
+            <button id="feedback-modal-button" type="button" class="mt-5 w-full rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-white transition-colors active:scale-[0.99] hover:bg-primary/90">
+                Ir al Perfil
+            </button>
+        </div>
+    </div>
+
 
     <!-- LÓGICA DE PERFIL (Conecta con FastAPI) -->
     <script>
@@ -150,11 +165,46 @@
         let telegramId = urlParams.get('telegram_id');
         // Estado local que indica si el usuario completó su perfil (tiene al menos una preferencia/restricción)
         let perfilCompleto = false;
+        let feedbackModalAction = null;
+
+        function showFeedbackModal({ icon = 'settings', title = 'Configuración Pendiente', message = '', buttonText = 'Entendido', action = null }) {
+            const modal = document.getElementById('feedback-modal');
+            const iconElement = document.getElementById('feedback-modal-icon');
+            const titleElement = document.getElementById('feedback-modal-title');
+            const messageElement = document.getElementById('feedback-modal-message');
+            const buttonElement = document.getElementById('feedback-modal-button');
+
+            if (!modal || !iconElement || !titleElement || !messageElement || !buttonElement) return;
+
+            iconElement.textContent = icon;
+            titleElement.textContent = title;
+            messageElement.textContent = message;
+            buttonElement.textContent = buttonText;
+            feedbackModalAction = typeof action === 'function' ? action : null;
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function hideFeedbackModal() {
+            const modal = document.getElementById('feedback-modal');
+            if (!modal) return;
+
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            feedbackModalAction = null;
+        }
 
         // Intentos de navegación desde la barra inferior: si el perfil no está completo mostramos mensaje
         function attemptGoToScanner() {
             if (!perfilCompleto) {
-                alert('Completa tu perfil antes de usar el escáner.');
+                showFeedbackModal({
+                    icon: 'settings',
+                    title: 'Configuración Pendiente',
+                    message: 'Primero debes terminar de configurar tu perfil para usar esta opción.',
+                    buttonText: 'Ir al Perfil',
+                    action: goToPerfil
+                });
                 return;
             }
             goToScanner();
@@ -162,7 +212,13 @@
 
         function attemptGoToHistory() {
             if (!perfilCompleto) {
-                alert('Completa tu perfil antes de ver el historial.');
+                showFeedbackModal({
+                    icon: 'settings',
+                    title: 'Configuración Pendiente',
+                    message: 'Primero debes terminar de configurar tu perfil para usar esta opción.',
+                    buttonText: 'Ir al Perfil',
+                    action: goToPerfil
+                });
                 return;
             }
             goToHistory();
@@ -219,6 +275,24 @@
             acc[normalizarTexto(nombre)] = { nombre, ...config };
             return acc;
         }, {});
+
+        document.getElementById('feedback-modal-button')?.addEventListener('click', () => {
+            const action = feedbackModalAction;
+            hideFeedbackModal();
+            if (action) action();
+        });
+
+        document.getElementById('feedback-modal')?.addEventListener('click', (event) => {
+            if (event.target.id === 'feedback-modal') {
+                hideFeedbackModal();
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                hideFeedbackModal();
+            }
+        });
 
         document.addEventListener('DOMContentLoaded', async () => {
             if (window.Telegram && window.Telegram.WebApp) {
@@ -381,11 +455,21 @@
                     // Refrescar el perfil de inmediato para que el switch cambie a azul
                     await cargarPerfil();
                 } else {
-                    alert(data.error || 'No se pudo actualizar en la base de datos');
+                    showFeedbackModal({
+                        icon: 'error',
+                        title: 'No se pudo guardar',
+                        message: data.error || 'No se pudo actualizar en la base de datos.',
+                        buttonText: 'Entendido'
+                    });
                 }
             } catch (err) {
                 console.error('Error:', err);
-                alert('Fallo de conexión al guardar.');
+                showFeedbackModal({
+                    icon: 'wifi_off',
+                    title: 'Fallo de conexión',
+                    message: 'No pudimos guardar los cambios. Intenta de nuevo en unos segundos.',
+                    buttonText: 'Entendido'
+                });
             } finally {
                 buttonElement.style.pointerEvents = 'auto'; // Reactivar botón
             }
