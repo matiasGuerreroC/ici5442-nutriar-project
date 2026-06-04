@@ -46,7 +46,7 @@ let lastCapturedBlob = null;  // Guardar última imagen para reintentos
 // ==========================================
 // 2. INICIALIZACIÓN
 // ==========================================
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
     const urlParams = new URLSearchParams(window.location.search);
     const urlTelegramId = urlParams.get('telegram_id');
 
@@ -71,13 +71,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
     }
-    
-    // Verificar configuración ANTES de inicializar la cámara
-    const isConfigured = await checkProfileConfiguration();
-    if (isConfigured) {
-        initCamera();
-    }
 });
+
+
+initCamera();
 
 async function initCamera() {
     try {
@@ -103,93 +100,6 @@ async function initCamera() {
     }
 }
 
-// Verificar si el perfil está configurado (tiene al menos una restricción activa)
-async function checkProfileConfiguration() {
-    if (!telegramId) return true; // Permitir si no hay telegramId (modo web)
-    
-    try {
-        const response = await fetch(`${apiBaseUrl}/api/usuario/${telegramId}`);
-        const data = await response.json();
-        
-        if (data.usuario && data.usuario.restricciones && data.usuario.restricciones.length === 0) {
-            // Usuario sin restricciones - perfil no configurado
-            showConfigurationBlockedUI();
-            return false; // No inicializar la cámara
-        }
-        
-        return true; // Perfil configurado - permitir usar el escáner
-    } catch (err) {
-        console.error('Error verificando configuración del perfil:', err);
-        return true; // Por seguridad, permitir si hay error
-    }
-}
-
-// Mostrar UI bloqueada cuando el perfil no está configurado
-function showConfigurationBlockedUI() {
-    // Bloquear la pantalla principal
-    const main = document.querySelector('main');
-    if (main) {
-        main.style.opacity = '0.3';
-        main.style.pointerEvents = 'none';
-    }
-    
-    // Bloquear la navbar inferior también
-    const nav = document.querySelector('nav');
-    if (nav) {
-        nav.style.opacity = '0.3';
-        nav.style.pointerEvents = 'none';
-    }
-    
-    // Crear overlay con mensaje
-    const overlay = document.createElement('div');
-    overlay.id = 'config-blocked-overlay';
-    overlay.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.7);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        z-index: 9999;
-    `;
-    
-    const messageBox = document.createElement('div');
-    messageBox.style.cssText = `
-        background: white;
-        border-radius: 20px;
-        padding: 24px;
-        max-width: 280px;
-        text-align: center;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-    `;
-    
-    messageBox.innerHTML = `
-        <span class="material-symbols-outlined" style="font-size: 48px; color: #005f9e; margin-bottom: 12px; display: block; font-variation-settings: 'FILL' 1;">settings</span>
-        <h2 style="font-size: 18px; font-weight: 700; color: #1a1c1c; margin-bottom: 8px;">Configuración Pendiente</h2>
-        <p style="font-size: 14px; color: #404751; margin-bottom: 20px; line-height: 1.5;">Primero debes terminar de configurar tu perfil para usar esta opción.</p>
-        <button onclick="goToPerfil()" style="
-            width: 100%;
-            padding: 12px;
-            background: #005f9e;
-            color: white;
-            border: none;
-            border-radius: 12px;
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
-            transition: background 0.3s;
-        " onmouseover="this.style.background='#004080'" onmouseout="this.style.background='#005f9e'">
-            Ir al Perfil
-        </button>
-    `;
-    
-    overlay.appendChild(messageBox);
-    document.body.appendChild(overlay);
-}
 
 
 // ==========================================

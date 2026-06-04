@@ -34,103 +34,6 @@
     <style>
         body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
         .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
-        
-        /* Modal de notificación del sistema */
-        #config-modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.4);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 2000;
-            animation: fadeIn 0.3s ease-out;
-        }
-        
-        #config-modal {
-            background: white;
-            border-radius: 24px;
-            padding: 32px 24px;
-            max-width: 320px;
-            width: 85vw;
-            text-align: center;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-            animation: slideUp 0.3s ease-out;
-        }
-        
-        #config-modal .modal-icon {
-            font-size: 48px;
-            color: #005f9e;
-            margin-bottom: 16px;
-            display: block;
-            font-variation-settings: 'FILL' 1;
-        }
-        
-        #config-modal h2 {
-            font-size: 18px;
-            font-weight: 700;
-            color: #1a1c1c;
-            margin-bottom: 12px;
-        }
-        
-        #config-modal p {
-            font-size: 14px;
-            color: #404751;
-            margin-bottom: 24px;
-            line-height: 1.5;
-        }
-        
-        #config-modal button {
-            width: 100%;
-            padding: 12px;
-            background: #005f9e;
-            color: white;
-            border: none;
-            border-radius: 12px;
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
-            transition: background 0.2s, transform 0.1s;
-        }
-        
-        #config-modal button:active {
-            transform: scale(0.98);
-        }
-        
-        #config-modal button:hover {
-            background: #004080;
-        }
-        
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-            }
-            to {
-                opacity: 1;
-            }
-        }
-        
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        /* Botones deshabilitados cuando el perfil no está configurado */
-        .nav-button-disabled {
-            opacity: 0.4;
-            pointer-events: none;
-            color: #b3b3b3 !important;
-        }
     </style>
 </head>
 <body class="bg-surface text-on-surface min-h-screen pb-24">
@@ -224,11 +127,11 @@
     <!-- BottomNavBar -->
     <nav class="fixed bottom-0 left-0 w-full z-50 bg-[#f9f9f9] shadow-[0_-4px_24px_rgba(0,0,0,0.05)] border-t border-outline-variant/20">
         <div class="flex justify-around items-center h-16 px-4 pb-2 w-full">
-            <button id="nav-scanner" onclick="preventNavigation('scanner')" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors px-4 py-1 active:scale-95">
+            <button id="nav-scanner" onclick="attemptGoToScanner()" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors px-4 py-1 active:scale-95">
                 <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">barcode_scanner</span>
                 <span class="text-[10px] font-bold tracking-wider uppercase mt-0.5">Escanear</span>
             </button>
-            <button id="nav-history" onclick="preventNavigation('history')" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors px-4 py-1 active:scale-95">
+            <button id="nav-history" onclick="attemptGoToHistory()" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors px-4 py-1 active:scale-95">
                 <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">history</span>
                 <span class="text-[10px] font-bold tracking-wider uppercase mt-0.5">Historial</span>
             </button>
@@ -245,7 +148,40 @@
         const apiBaseUrl = window.location.origin;
         const urlParams = new URLSearchParams(window.location.search);
         let telegramId = urlParams.get('telegram_id');
-        let isProfileConfiguring = false;
+        // Estado local que indica si el usuario completó su perfil (tiene al menos una preferencia/restricción)
+        let perfilCompleto = false;
+
+        // Intentos de navegación desde la barra inferior: si el perfil no está completo mostramos mensaje
+        function attemptGoToScanner() {
+            if (!perfilCompleto) {
+                alert('Completa tu perfil antes de usar el escáner.');
+                return;
+            }
+            goToScanner();
+        }
+
+        function attemptGoToHistory() {
+            if (!perfilCompleto) {
+                alert('Completa tu perfil antes de ver el historial.');
+                return;
+            }
+            goToHistory();
+        }
+
+        function updateNavState() {
+            const scannerBtn = document.getElementById('nav-scanner');
+            const historyBtn = document.getElementById('nav-history');
+
+            if (!scannerBtn || !historyBtn) return;
+
+            if (perfilCompleto) {
+                scannerBtn.classList.remove('opacity-40', 'cursor-not-allowed');
+                historyBtn.classList.remove('opacity-40', 'cursor-not-allowed');
+            } else {
+                scannerBtn.classList.add('opacity-40', 'cursor-not-allowed');
+                historyBtn.classList.add('opacity-40', 'cursor-not-allowed');
+            }
+        }
 
         // MAPEO EXACTO: Qué icono lleva cada restricción y a qué grupo pertenece
         const GUI_CONFIG = {
@@ -372,6 +308,10 @@
                 const userActiveIds = dataUser.usuario.restricciones.map(r => r.id);
                 const userActiveNames = dataUser.usuario.restricciones.map(r => r.nombre.replace('Preferencia: ', '').trim());
 
+                // Determinar si el perfil del usuario se considera "completo" (al menos una restricción/preferencia)
+                perfilCompleto = userActiveIds.length > 0;
+                updateNavState();
+
                 // Actualizar info de usuario en la Tarjeta
                 const dbName = dataUser.usuario.nombre;
                 if (dbName) {
@@ -384,10 +324,6 @@
                     ? `Activas: ${userActiveNames.slice(0, 2).join(', ')}${userActiveNames.length > 2 ? '...' : ''}` 
                     : 'Sin restricciones activas';
                 document.getElementById('profile-subtitle').textContent = 'Edita tus condiciones';
-                
-                // Establecer si está configurando el perfil (sin restricciones activas)
-                isProfileConfiguring = userActiveNames.length === 0;
-                updateNavigationButtons(); // Actualizar visualización de botones
 
                 // 5. DIBUJAR EN PANTALLA SEGÚN LOS 2 GRUPOS EXACTOS
                 let htmlCondicionesMedicasAlergias = '';
@@ -452,76 +388,6 @@
                 alert('Fallo de conexión al guardar.');
             } finally {
                 buttonElement.style.pointerEvents = 'auto'; // Reactivar botón
-            }
-        }
-        
-        // Función para prevenir navegación si el perfil está sin configurar
-        function preventNavigation(page) {
-            if (isProfileConfiguring) {
-                showConfigurationModal();
-                return;
-            }
-            
-            // Si ya está configurado, navegar normalmente
-            if (page === 'scanner') {
-                window.location.href = `/?telegram_id=${telegramId}`;
-            } else if (page === 'history') {
-                window.location.href = `/historial?telegram_id=${telegramId}`;
-            }
-        }
-        
-        // Función para mostrar modal de configuración pendiente
-        function showConfigurationModal() {
-            // Eliminar modales previos si existen
-            const existingOverlay = document.getElementById('config-modal-overlay');
-            if (existingOverlay) {
-                existingOverlay.remove();
-            }
-            
-            // Crear overlay
-            const overlay = document.createElement('div');
-            overlay.id = 'config-modal-overlay';
-            
-            // Crear modal
-            const modal = document.createElement('div');
-            modal.id = 'config-modal';
-            
-            modal.innerHTML = `
-                <span class="material-symbols-outlined modal-icon">settings</span>
-                <h2>Configuración Pendiente</h2>
-                <p>Primero debes terminar de configurar tu perfil para usar esta opción</p>
-                <button onclick="closeConfigurationModal(); goToPerfil();">Ir al Perfil</button>
-            `;
-            
-            overlay.appendChild(modal);
-            overlay.onclick = (e) => {
-                if (e.target === overlay) {
-                    closeConfigurationModal();
-                }
-            };
-            
-            document.body.appendChild(overlay);
-        }
-        
-        // Función para cerrar el modal de configuración
-        function closeConfigurationModal() {
-            const overlay = document.getElementById('config-modal-overlay');
-            if (overlay) {
-                overlay.remove();
-            }
-        }
-        
-        // Función para actualizar visualmente los botones de navegación
-        function updateNavigationButtons() {
-            const scannerBtn = document.getElementById('nav-scanner');
-            const historyBtn = document.getElementById('nav-history');
-            
-            if (isProfileConfiguring) {
-                scannerBtn.classList.add('nav-button-disabled');
-                historyBtn.classList.add('nav-button-disabled');
-            } else {
-                scannerBtn.classList.remove('nav-button-disabled');
-                historyBtn.classList.remove('nav-button-disabled');
             }
         }
     </script>
