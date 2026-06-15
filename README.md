@@ -13,7 +13,7 @@ Para la revisión de la **Entrega 3**, el sistema se encuentra desplegado y 100%
 **[Iniciar NutriAR en Telegram (@NUTRIAR_ICI5442_BOT)](https://t.me/NUTRIAR_ICI5442_BOT)**
 
 <p align="center">
-  <img src="RUTA_DE_TU_IMAGEN_AQUI/qr_nutriar.jpg" alt="QR NutriAR" width="300"/>
+  <img src="source/qr_nutriar.jpeg" alt="QR NutriAR" width="300"/>
 </p>
 
 > **IMPORTANTE: Despertar el Servidor (Cold Start)**
@@ -46,6 +46,8 @@ El sistema se encuentra en su versión estable y definitiva (v1.0), con la total
 ici5442-nutriar-project/
 ├── bot.py                # Punto de entrada de FastAPI y gestor del bot de Telegram
 ├── requirements.txt      # Dependencias del proyecto (Backend)
+├── source/
+│   └── qr_nutriar.jpeg
 ├── backend/
 │   ├── database.py       # Conexión ORM a Neon DB (PostgreSQL)
 │   └── models.py         # Modelos de datos y esquemas Pydantic
